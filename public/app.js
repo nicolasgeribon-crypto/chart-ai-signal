@@ -279,3 +279,76 @@ $('#clearHistoryBtn').addEventListener('click', () => {
 
 renderHistory();
 refreshStatus();
+
+// --- Bot DEMO V6: backtest local, sin ejecución de operaciones ---
+const botCsvInput = $('#botCsvInput');
+const botPickBtn = $('#botPickBtn');
+const runBotBtn = $('#runBotBtn');
+let botCandles = [];
+
+document.querySelectorAll('.mode-tab').forEach(btn => btn.addEventListener('click', () => {
+  document.querySelectorAll('.mode-tab').forEach(b => b.classList.toggle('active', b === btn));
+  const bot = btn.dataset.mode === 'bot';
+  document.querySelectorAll('.capture-only,[data-capture="1"]').forEach(el => el.classList.toggle('hidden', bot));
+  $('#botSection').classList.toggle('hidden', !bot);
+}));
+
+botPickBtn?.addEventListener('click', () => botCsvInput.click());
+botCsvInput?.addEventListener('change', async () => {
+  const f = botCsvInput.files?.[0]; if (!f) return;
+  try {
+    botCandles = parseCandleCsv(await f.text());
+    $('#botFileInfo').textContent = `${f.name} · ${botCandles.length} velas válidas y únicas`;
+    $('#botFileInfo').classList.remove('hidden'); runBotBtn.classList.remove('hidden');
+  } catch (e) { alert(e.message); }
+});
+
+function parseCandleCsv(text) {
+  const lines = text.trim().split(/\r?\n/); if (lines.length < 3) throw new Error('CSV sin datos suficientes.');
+  const headers = lines[0].split(',').map(x => x.trim().replace(/^"|"$/g,''));
+  const idx = Object.fromEntries(headers.map((h,i)=>[h,i]));
+  for (const k of ['candle_time_utc','open','high','low','close']) if (idx[k] == null) throw new Error(`Falta la columna ${k}.`);
+  const byTime = new Map();
+  for (let n=1;n<lines.length;n++) {
+    const a=lines[n].split(','); const t=a[idx.candle_time_utc]?.trim(); if(!t) continue;
+    const c={t, time:new Date(t).getTime(), open:+a[idx.open], high:+a[idx.high], low:+a[idx.low], close:+a[idx.close]};
+    if(Number.isFinite(c.time)&&[c.open,c.high,c.low,c.close].every(Number.isFinite)) byTime.set(t,c); // conserva la última actualización de cada vela
+  }
+  return [...byTime.values()].sort((a,b)=>a.time-b.time);
+}
+function ema(vals, period){const k=2/(period+1);let e=vals[0];for(let i=1;i<vals.length;i++)e=vals[i]*k+e*(1-k);return e;}
+function rsi(vals,p=14){if(vals.length<p+1)return 50;let g=0,l=0;for(let i=vals.length-p;i<vals.length;i++){const d=vals[i]-vals[i-1];if(d>0)g+=d;else l-=d;}if(l===0)return 100;const rs=(g/p)/(l/p);return 100-(100/(1+rs));}
+function botSignal(candles,i,strategy){
+  if(i<25)return null; const w=candles.slice(i-24,i+1), closes=w.map(x=>x.close), c=candles[i];
+  const e9=ema(closes.slice(-12),9), e21=ema(closes,21), rv=rsi(closes,14), mom=c.close-closes[closes.length-4];
+  const down=(c.close<e9)+(e9<e21)+(rv<48)+(mom<0)+(c.close<c.open);
+  const up=(c.close>e9)+(e9>e21)+(rv>52)+(mom>0)+(c.close>c.open);
+  let signal=null,score=0;
+  if(down>=4){signal='SELL';score=down+2;} else if(up>=4){signal='BUY';score=up+2;}
+  if(!signal)return null;
+  // El modo validado refleja el hallazgo exploratorio del historial: score equivalente 7–8 y mayor selectividad en SELL.
+  if(strategy==='validated' && (score<7||score>8)) return null;
+  if(strategy==='validated' && signal==='BUY' && up<5) return null;
+  const confidence=Math.min(95, 55+score*5);
+  return {signal,score,confidence,rsi:rv};
+}
+function runBacktest(){
+  const duration=+$('#botDuration').value, strategy=$('#botStrategy').value, out=[];
+  for(let i=25;i<botCandles.length-duration;i++){
+    const s=botSignal(botCandles,i,strategy); if(!s)continue;
+    const entry=botCandles[i].close, exit=botCandles[i+duration].close;
+    const diff=exit-entry; const result=Math.abs(diff)<1e-12?'DRAW':(s.signal==='BUY'?diff>0:diff<0)?'WIN':'LOSS';
+    out.push({...s,entryIndex:i,entryTime:botCandles[i].t,exitTime:botCandles[i+duration].t,result});
+    i+=duration-1;
+  }
+  renderBotResults(out,duration);
+}
+runBotBtn?.addEventListener('click',runBacktest);
+function renderBotResults(rows,duration){
+  const wins=rows.filter(x=>x.result==='WIN').length, losses=rows.filter(x=>x.result==='LOSS').length, resolved=wins+losses;
+  $('#botRows').textContent=`${botCandles.length} velas`; $('#botSignals').textContent=rows.length; $('#botWins').textContent=wins; $('#botLosses').textContent=losses; $('#botAccuracy').textContent=resolved?`${(wins/resolved*100).toFixed(1)}%`:'—';
+  $('#botSummary').textContent=`Duración ${duration} min. DRAW no cuenta en el porcentaje. Resultado calculado con el cierre futuro solo después de generar cada señal; no se usa para decidir la entrada.`;
+  const list=$('#botSignalList'); list.innerHTML='';
+  rows.slice(-50).reverse().forEach(x=>{const d=document.createElement('div');d.className=`bot-signal-row ${x.signal.toLowerCase()}`;const dt=new Date(x.entryTime);d.innerHTML=`<div><strong>${x.signal==='BUY'?'↑ COMPRA':'↓ VENTA'} · ${dt.toLocaleString()}</strong><small>score ${x.score} · confianza análisis ${x.confidence}%</small></div><strong class="${x.result.toLowerCase()}">${x.result}</strong>`;list.appendChild(d);});
+  $('#botResults').classList.remove('hidden'); $('#botResults').scrollIntoView({behavior:'smooth'});
+}

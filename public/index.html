@@ -19,14 +19,14 @@
       <div id="statusBadge" class="online"><i></i> IA</div>
     </header>
 
-    <section class="hero">
-      <span class="eyebrow">✦ análisis visual</span>
+    <section class="hero capture-only">
+      <div class="mode-tabs"><button class="mode-tab active" data-mode="capture">📸 CAPTURA</button><button class="mode-tab" data-mode="bot">🤖 BOT DEMO</button></div><span class="eyebrow">✦ análisis visual</span>
       <h2>Análisis con IA por captura</h2>
       <p>Sube una captura completa del gráfico. La IA revisará estructura, tendencia y niveles visibles.</p>
       <div class="quota">● LISTO PARA ANALIZAR</div>
     </section>
 
-    <section class="card upload-card" id="uploadCard">
+    <section class="card upload-card capture-only" id="uploadCard">
       <input id="fileInput" type="file" accept="image/png,image/jpeg,image/webp" hidden />
       <button id="pickBtn" class="dropzone" type="button">
         <div class="camera">▣</div>
@@ -40,7 +40,7 @@
       <button id="analyzeBtn" class="primary hidden" type="button">✦ Analizar con IA</button>
     </section>
 
-    <section id="progressCard" class="card progress-card hidden">
+    <section data-capture="1" id="progressCard" class="card progress-card hidden">
       <div class="scan-wrap"><img id="scanImg" alt="Captura en análisis" /><div class="scanline"></div></div>
       <div class="steps">
         <div data-step="0">✓ Verificando la captura…</div>
@@ -52,7 +52,7 @@
       <div class="bar"><span id="progressBar"></span></div>
     </section>
 
-    <section id="resultCard" class="card result-card hidden">
+    <section data-capture="1" id="resultCard" class="card result-card hidden">
       <div class="result-head"><span>●●● resultado · chart-ai</span><span id="assetBadge">—</span></div>
       <div class="signal-row">
         <div><small>SEÑAL</small><strong id="signal"><span id="signalIcon">•</span> —</strong><div id="signalSub" class="signal-sub">Esperando análisis</div></div>
@@ -80,7 +80,33 @@
       <button id="anotherBtn" class="primary" type="button">Analizar otra</button>
     </section>
 
-    <section id="errorCard" class="card error-card hidden"><b>No se pudo analizar</b><p id="errorText"></p></section>
+    <section data-capture="1" id="errorCard" class="card error-card hidden"><b>No se pudo analizar</b><p id="errorText"></p></section>
+
+
+    <section id="botSection" class="hidden">
+      <section class="hero bot-hero">
+        <span class="eyebrow">🤖 laboratorio de señales</span>
+        <h2>Bot DEMO</h2>
+        <p>Prueba la lógica con un CSV de velas históricas. El backtest usa solo velas anteriores a cada entrada.</p>
+      </section>
+      <section class="card bot-card">
+        <input id="botCsvInput" type="file" accept=".csv,text/csv" hidden />
+        <button id="botPickBtn" class="dropzone bot-drop" type="button"><div class="camera">CSV</div><strong>Cargar historial de velas</strong><small>Columnas: candle_time_utc, open, high, low, close</small></button>
+        <div id="botFileInfo" class="bot-file-info hidden"></div>
+        <div class="bot-controls">
+          <label>Duración<select id="botDuration"><option value="1">1 minuto</option><option value="5">5 minutos</option></select></label>
+          <label>Modo<select id="botStrategy"><option value="validated">Filtro validado</option><option value="balanced">Balanceado</option></select></label>
+        </div>
+        <button id="runBotBtn" class="primary hidden" type="button">▶ Ejecutar backtest DEMO</button>
+        <p class="bot-note">El porcentaje mostrado es histórico sobre el archivo cargado; no garantiza resultados futuros. No ejecuta operaciones.</p>
+      </section>
+      <section id="botResults" class="card hidden">
+        <div class="history-head"><div><small>BACKTEST DEMO</small><strong>Resultados del bot</strong></div><span id="botRows" class="mini-badge">0 velas</span></div>
+        <div class="stats-grid"><div><small>SEÑALES</small><strong id="botSignals">0</strong></div><div><small>WIN</small><strong id="botWins">0</strong></div><div><small>LOSS</small><strong id="botLosses">0</strong></div><div><small>ACIERTO</small><strong id="botAccuracy">—</strong></div></div>
+        <div class="bot-summary" id="botSummary"></div>
+        <div id="botSignalList" class="history-list"></div>
+      </section>
+    </section>
 
     <section id="historyCard" class="card history-card">
       <div class="history-head">
