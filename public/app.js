@@ -536,8 +536,14 @@ function mg1PolicyCandidates(){
     {id:'ema_mom3_not_stretched',label:'EMA + momentum 3 + RSI no extremo',ok:(f,s)=>ema(f,s)&&m3(f,s)&&(s==='SELL'?f.rsi>=25:f.rsi<=75)}
   ];
 }
+function getPayout(){
+  const n=Number(document.getElementById('payoutPct')?.value||82);
+  return Math.max(1,Math.min(100,n))/100;
+}
+function mg1StakeForPayout(payout){ return (1+payout)/payout; }
+
 function martingale1Stats(rows,duration,policy=null){
-  const chosen=policy||mg1PolicyCandidates()[0];
+  const chosen=policy||mg1PolicyCandidates()[0], payout=getPayout(), mgStake=mg1StakeForPayout(payout);
   let cycleWins=0,cycleLosses=0,mgUsed=0,mgSkipped=0,mgWins=0,mgLosses=0,netUnits=0;
   let equity=0,peak=0,maxDrawdown=0,lossStreak=0,maxLossStreak=0;
   const details=[];
@@ -545,33 +551,32 @@ function martingale1Stats(rows,duration,policy=null){
     equity+=units; netUnits+=units;
     if(equity>peak) peak=equity;
     maxDrawdown=Math.max(maxDrawdown,peak-equity);
-    if(won) lossStreak=0;
-    else { lossStreak++; maxLossStreak=Math.max(maxLossStreak,lossStreak); }
+    if(won) lossStreak=0; else {lossStreak++;maxLossStreak=Math.max(maxLossStreak,lossStreak);}
   };
   for(const x of rows){
     if(x.result==='DRAW') continue;
     if(x.result==='WIN'){
-      cycleWins++; closeCycle(1,true); details.push({...x,mg1:'NO',cycleResult:'WIN'}); continue;
+      cycleWins++; closeCycle(payout,true); details.push({...x,mg1:'NO',cycleResult:'WIN'}); continue;
     }
-    const mgIndex=x.entryIndex+duration,f=botFeatureCache[mgIndex];
-    const allowed=!!f&&chosen.ok(f,x.signal);
+    const mgIndex=x.entryIndex+duration,f=botFeatureCache[mgIndex],allowed=!!f&&chosen.ok(f,x.signal);
     if(!allowed){
-      mgSkipped++; cycleLosses++; closeCycle(-1,false); details.push({...x,mg1:'SKIP',cycleResult:'LOSS'}); continue;
+      mgSkipped++;cycleLosses++;closeCycle(-1,false);details.push({...x,mg1:'SKIP',cycleResult:'LOSS'});continue;
     }
     mgUsed++;
     const mgResult=resultFor(botCandles,mgIndex,duration,x.signal);
     if(mgResult==='WIN'){
-      mgWins++; cycleWins++; closeCycle(1,true); details.push({...x,mg1:'WIN',cycleResult:'WIN'});
+      mgWins++;cycleWins++;closeCycle(-1+mgStake*payout,true);details.push({...x,mg1:'WIN',cycleResult:'WIN'});
     }else if(mgResult==='LOSS'){
-      mgLosses++; cycleLosses++; closeCycle(-3,false); details.push({...x,mg1:'LOSS',cycleResult:'LOSS'});
+      mgLosses++;cycleLosses++;closeCycle(-(1+mgStake),false);details.push({...x,mg1:'LOSS',cycleResult:'LOSS'});
     }else{
-      cycleLosses++; closeCycle(-1,false); details.push({...x,mg1:'DRAW',cycleResult:'LOSS'});
+      cycleLosses++;closeCycle(-1,false);details.push({...x,mg1:'DRAW',cycleResult:'LOSS'});
     }
   }
   const cycles=cycleWins+cycleLosses;
   return {cycles,cycleWins,cycleLosses,accuracy:cycles?cycleWins/cycles:null,mgUsed,mgSkipped,mgWins,mgLosses,
-    netUnits,maxDrawdown,maxLossStreak,unitsPerCycle:cycles?netUnits/cycles:0,details,policy:chosen};
+    netUnits,maxDrawdown,maxLossStreak,unitsPerCycle:cycles?netUnits/cycles:0,details,policy:chosen,payout,mgStake};
 }
+
 function selectMg1Policy(devRows,duration){
   const candidates=mg1PolicyCandidates().map(policy=>({policy,stats:martingale1Stats(devRows,duration,policy)}));
   const enough=candidates.filter(x=>x.stats.mgUsed>=10);
@@ -598,7 +603,7 @@ function selectMg1Policy(devRows,duration){
   );
   const netPlus=np[0];
 
-  // V16 ADAPTATIVO: premia neto y penaliza drawdown/rachas; solo usa desarrollo+confirmación.
+  // V17 ADAPTATIVO: premia neto y penaliza drawdown/rachas; solo usa desarrollo+confirmación.
   const adaptivePool=base.filter(x=>x.stats.netUnits>0 && x.stats.maxDrawdown<=10 && x.stats.maxLossStreak<=3);
   const ap=adaptivePool.length?adaptivePool:base;
   ap.sort((a,b)=>{
@@ -631,9 +636,9 @@ function renderBotResults(rows,duration,label='Backtest',mgSelection=null){
   $('#mg1Drawdown').textContent=`${mg.maxDrawdown.toFixed(0)} u`;
   $('#mg1LossStreak').textContent=mg.maxLossStreak;
   $('#mg1Used').textContent=mg.mgUsed;
-  $('#mg1Note').textContent=`Filtro MG1 elegido: ${mg.policy.label}. MG1 usado ${mg.mgUsed} veces y omitido ${mg.mgSkipped}: ${mg.mgWins} WIN / ${mg.mgLosses} LOSS en MG1. Neto teórico ${mg.netUnits>=0?'+':''}${mg.netUnits.toFixed(0)} unidades; drawdown máximo ${mg.maxDrawdown.toFixed(0)}u; racha máxima ${mg.maxLossStreak} ciclos perdidos. Simulación con pago 1:1 (1 inicial y 2 en MG1).`;
+  $('#mg1Note').textContent=`Filtro MG1 elegido: ${mg.policy.label}. MG1 usado ${mg.mgUsed} veces y omitido ${mg.mgSkipped}: ${mg.mgWins} WIN / ${mg.mgLosses} LOSS en MG1. Neto teórico ${mg.netUnits>=0?'+':''}${mg.netUnits.toFixed(0)} unidades; drawdown máximo ${mg.maxDrawdown.toFixed(0)}u; racha máxima ${mg.maxLossStreak} ciclos perdidos. Payout ${Math.round(mg.payout*100)}%. Entrada 1u; MG1 ${mg.mgStake.toFixed(2)}u.`;
   const rank=mgSelection?.ranking||[];
-  $('#mg1Compare').textContent=rank.length?`V16 ${mgSelection?.riskTier||''}. Ranking elegido SOLO en desarrollo+confirmación: ${rank.map((x,i)=>`${i+1}) ${x.policy.label}: ${x.stats.netUnits>=0?'+':''}${x.stats.netUnits.toFixed(0)}u, DD ${x.stats.maxDrawdown.toFixed(0)}u, racha ${x.stats.maxLossStreak}`).join(' · ')}. El 30% final NO participa en la selección.`:'Sin ranking de políticas para este modo.';
+  $('#mg1Compare').textContent=rank.length?`V17 ${mgSelection?.riskTier||''}. Ranking elegido SOLO en desarrollo+confirmación: ${rank.map((x,i)=>`${i+1}) ${x.policy.label}: ${x.stats.netUnits>=0?'+':''}${x.stats.netUnits.toFixed(0)}u, DD ${x.stats.maxDrawdown.toFixed(0)}u, racha ${x.stats.maxLossStreak}`).join(' · ')}. El 30% final NO participa en la selección.`:'Sin ranking de políticas para este modo.';
   const profileEl=$('#mg1Profiles');
   if(profileEl){
     const fmt=x=>`${x.netUnits>=0?'+':''}${x.netUnits.toFixed(0)}u · ciclos ${x.accuracy!==null?(x.accuracy*100).toFixed(1)+'%':'—'} · DD ${x.maxDrawdown.toFixed(0)}u · racha ${x.maxLossStreak} · MG1 ${x.mgUsed}`;
