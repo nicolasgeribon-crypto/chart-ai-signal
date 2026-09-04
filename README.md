@@ -1,3 +1,11 @@
+# Chart AI Signal V12 — MG1 selectiva
+
+Basado en V9/V11. Mantiene intacta la lógica de señales V9 y añade una Martingala 1 selectiva.
+
+En validación robusta, el filtro que decide cuándo permitir MG1 se elige únicamente con el 70% de desarrollo + confirmación. El 30% final queda fuera de muestra y no participa en esa selección. Compara condiciones de EMA, momentum, fuerza y RSI.
+
+Muestra MG1 usadas/omitidas, ciclos ganados/perdidos, acierto de ciclos y neto teórico con pago 1:1. Es una simulación histórica educativa; no garantiza resultados futuros ni ejecuta operaciones.
+
 # Chart AI Signal V11 — Martingala 1
 
 Basado en V9. Añade simulación MG1 al backtest: tras una LOSS, una sola entrada adicional en la misma dirección al vencimiento siguiente. Muestra ciclos ganados/perdidos, acierto MG1 y neto teórico con pago 1:1. No cambia la lógica de señales V9.
