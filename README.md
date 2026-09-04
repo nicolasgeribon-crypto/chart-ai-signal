@@ -1,26 +1,12 @@
-# Chart AI Signal V14
+# Chart AI Signal V15
 
-V14 parte de V13 y mantiene la estrategia de entradas por retroceso.
+V15 compara dos perfiles de Martingala 1 sin usar el 30% final para escogerlos.
 
-## Cambio principal
-La Martingala 1 selectiva compara más filtros y los elige **solo** usando desarrollo + confirmación.
+- **Conservador:** prioriza menor racha y drawdown, manteniendo neto positivo.
+- **Neto+:** permite hasta 4 ciclos perdidos consecutivos y DD de hasta 10 unidades en desarrollo+confirmación para buscar mayor neto.
+- Después, ambos perfiles se congelan y se evalúan por separado en el 30% final fuera de muestra.
+- La pantalla muestra neto, acierto de ciclos, drawdown, racha máxima y cantidad de MG1 de cada perfil.
 
-Objetivo primario:
-- neto teórico positivo;
-- drawdown máximo <= 8 unidades;
-- racha máxima <= 2 ciclos perdidos.
+Esto permite comprobar si aceptar más riesgo realmente mejora el resultado en datos no usados para elegir la regla.
 
-Si ningún candidato cumple esos límites en desarrollo+confirmación, V14 usa un nivel relajado (DD <= 10 y racha <= 3) y, si tampoco existe, aplica una selección ajustada por riesgo.
-
-El 30% final permanece fuera de muestra y **no se usa para escoger el filtro**. Allí únicamente se mide qué ocurrió con la política ya elegida.
-
-La interfaz muestra:
-- ciclos y acierto MG1;
-- neto teórico;
-- drawdown máximo;
-- racha máxima de pérdidas;
-- cantidad de MG1 utilizadas;
-- ranking de candidatos seleccionado sin mirar la prueba final.
-
-Simulación educativa/histórica con supuesto de pago 1:1: 1 unidad inicial y 2 unidades en MG1.
-No garantiza resultados futuros ni ejecuta operaciones.
+Simulación histórica/educativa con supuesto 1:1: 1 unidad inicial y 2 unidades en MG1. No garantiza resultados futuros ni ejecuta operaciones.
