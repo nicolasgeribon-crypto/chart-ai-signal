@@ -280,7 +280,7 @@ $('#clearHistoryBtn').addEventListener('click', () => {
 renderHistory();
 refreshStatus();
 
-// --- Bot DEMO V6: backtest local, sin ejecución de operaciones ---
+// --- Bot DEMO V7: backtest local + validación temporal fuera de muestra ---
 const botCsvInput = $('#botCsvInput');
 const botPickBtn = $('#botPickBtn');
 const runBotBtn = $('#runBotBtn');
@@ -312,43 +312,141 @@ function parseCandleCsv(text) {
   for (let n=1;n<lines.length;n++) {
     const a=lines[n].split(','); const t=a[idx.candle_time_utc]?.trim(); if(!t) continue;
     const c={t, time:new Date(t).getTime(), open:+a[idx.open], high:+a[idx.high], low:+a[idx.low], close:+a[idx.close]};
-    if(Number.isFinite(c.time)&&[c.open,c.high,c.low,c.close].every(Number.isFinite)) byTime.set(t,c); // conserva la última actualización de cada vela
+    if(Number.isFinite(c.time)&&[c.open,c.high,c.low,c.close].every(Number.isFinite)) byTime.set(t,c);
   }
   return [...byTime.values()].sort((a,b)=>a.time-b.time);
 }
 function ema(vals, period){const k=2/(period+1);let e=vals[0];for(let i=1;i<vals.length;i++)e=vals[i]*k+e*(1-k);return e;}
 function rsi(vals,p=14){if(vals.length<p+1)return 50;let g=0,l=0;for(let i=vals.length-p;i<vals.length;i++){const d=vals[i]-vals[i-1];if(d>0)g+=d;else l-=d;}if(l===0)return 100;const rs=(g/p)/(l/p);return 100-(100/(1+rs));}
-function botSignal(candles,i,strategy){
-  if(i<25)return null; const w=candles.slice(i-24,i+1), closes=w.map(x=>x.close), c=candles[i];
+function featureAt(candles,i){
+  if(i<25)return null;
+  const w=candles.slice(i-24,i+1), closes=w.map(x=>x.close), c=candles[i];
   const e9=ema(closes.slice(-12),9), e21=ema(closes,21), rv=rsi(closes,14), mom=c.close-closes[closes.length-4];
+  const recent=candles.slice(Math.max(0,i-3),i+1);
+  const recentUp=recent.filter(x=>x.close>x.open).length, recentDown=recent.filter(x=>x.close<x.open).length;
   const down=(c.close<e9)+(e9<e21)+(rv<48)+(mom<0)+(c.close<c.open);
   const up=(c.close>e9)+(e9>e21)+(rv>52)+(mom>0)+(c.close>c.open);
-  let signal=null,score=0;
-  if(down>=4){signal='SELL';score=down+2;} else if(up>=4){signal='BUY';score=up+2;}
-  if(!signal)return null;
-  // El modo validado refleja el hallazgo exploratorio del historial: score equivalente 7–8 y mayor selectividad en SELL.
-  if(strategy==='validated' && (score<7||score>8)) return null;
-  if(strategy==='validated' && signal==='BUY' && up<5) return null;
-  const confidence=Math.min(95, 55+score*5);
-  return {signal,score,confidence,rsi:rv};
+  return {e9,e21,rsi:rv,mom,up,down,recentUp,recentDown,c};
 }
-function runBacktest(){
-  const duration=+$('#botDuration').value, strategy=$('#botStrategy').value, out=[];
-  for(let i=25;i<botCandles.length-duration;i++){
-    const s=botSignal(botCandles,i,strategy); if(!s)continue;
-    const entry=botCandles[i].close, exit=botCandles[i+duration].close;
-    const diff=exit-entry; const result=Math.abs(diff)<1e-12?'DRAW':(s.signal==='BUY'?diff>0:diff<0)?'WIN':'LOSS';
+function basicSignal(candles,i,strategy){
+  const f=featureAt(candles,i); if(!f)return null;
+  let signal=null,score=0;
+  if(f.down>=4){signal='SELL';score=f.down+2;} else if(f.up>=4){signal='BUY';score=f.up+2;}
+  if(!signal)return null;
+  if(strategy==='validated' && (score<7||score>8)) return null;
+  if(strategy==='validated' && signal==='BUY' && f.up<5) return null;
+  const confidence=Math.min(95,55+score*5);
+  return {signal,score,confidence,rsi:f.rsi};
+}
+function resultFor(candles,i,duration,signal){
+  if(i+duration>=candles.length)return 'DRAW';
+  const diff=candles[i+duration].close-candles[i].close;
+  if(Math.abs(diff)<1e-12)return 'DRAW';
+  return (signal==='BUY'?diff>0:diff<0)?'WIN':'LOSS';
+}
+function runFixedBacktest(strategy,duration,start=25,end=botCandles.length-duration){
+  const out=[];
+  for(let i=Math.max(25,start);i<Math.min(end,botCandles.length-duration);i++){
+    const s=basicSignal(botCandles,i,strategy); if(!s)continue;
+    const result=resultFor(botCandles,i,duration,s.signal);
     out.push({...s,entryIndex:i,entryTime:botCandles[i].t,exitTime:botCandles[i+duration].t,result});
     i+=duration-1;
   }
-  renderBotResults(out,duration);
+  return out;
+}
+function candidateRules(){
+  const rules=[];
+  for(const direction of ['SELL','BUY']) for(const votes of [4,5]) for(const trend of [false,true]) for(const majority of [false,true]) {
+    const gates=direction==='SELL'?[45,48,50]:[50,52,55];
+    for(const rsiGate of gates) rules.push({direction,votes,trend,majority,rsiGate});
+  }
+  return rules;
+}
+function matchesRule(f,r){
+  if(r.direction==='SELL'){
+    if(f.down<r.votes || f.rsi>r.rsiGate) return false;
+    if(r.trend && !(f.e9<f.e21)) return false;
+    if(r.majority && f.recentDown<3) return false;
+  } else {
+    if(f.up<r.votes || f.rsi<r.rsiGate) return false;
+    if(r.trend && !(f.e9>f.e21)) return false;
+    if(r.majority && f.recentUp<3) return false;
+  }
+  return true;
+}
+function evaluateRule(rule,duration,start,end){
+  const rows=[];
+  for(let i=Math.max(25,start);i<Math.min(end,botCandles.length-duration);i++){
+    const f=featureAt(botCandles,i); if(!f || !matchesRule(f,rule))continue;
+    const result=resultFor(botCandles,i,duration,rule.direction);
+    rows.push({signal:rule.direction,score:rule.direction==='SELL'?f.down+2:f.up+2,confidence:null,rsi:f.rsi,entryIndex:i,entryTime:botCandles[i].t,exitTime:botCandles[i+duration].t,result});
+    i+=duration-1;
+  }
+  return rows;
+}
+function stats(rows){
+  const wins=rows.filter(x=>x.result==='WIN').length, losses=rows.filter(x=>x.result==='LOSS').length, resolved=wins+losses;
+  return {wins,losses,resolved,total:rows.length,accuracy:resolved?wins/resolved:null};
+}
+function wilsonLower(w,n,z=1.64){
+  if(!n)return 0; const p=w/n, zz=z*z;
+  return (p+zz/(2*n)-z*Math.sqrt((p*(1-p)+zz/(4*n))/n))/(1+zz/n);
+}
+function ruleText(r){
+  const dir=r.direction==='SELL'?'VENTA':'COMPRA';
+  const trend=r.trend?' + tendencia EMA alineada':'';
+  const maj=r.majority?' + ≥3/4 velas en dirección':'';
+  const rg=r.direction==='SELL'?`RSI ≤ ${r.rsiGate}`:`RSI ≥ ${r.rsiGate}`;
+  return `${dir} · fuerza ≥ ${r.votes}/5 · ${rg}${trend}${maj}`;
+}
+function runWalkForward(duration){
+  const split=Math.floor(botCandles.length*0.70);
+  const trainStart=25, trainEnd=split, testStart=split, testEnd=botCandles.length-duration;
+  const candidates=[];
+  for(const rule of candidateRules()){
+    const rows=evaluateRule(rule,duration,trainStart,trainEnd), st=stats(rows);
+    if(st.resolved<30 || st.accuracy < 0.55 || wilsonLower(st.wins,st.resolved) <= 0.50)continue;
+    candidates.push({rule,rows,st,quality:wilsonLower(st.wins,st.resolved)});
+  }
+  candidates.sort((a,b)=>b.quality-a.quality || b.st.resolved-a.st.resolved);
+  const best=candidates[0];
+  if(!best) return {rows:[],train:null,test:null,rule:null,split};
+  const testRows=evaluateRule(best.rule,duration,testStart,testEnd), test=stats(testRows);
+  return {rows:testRows,train:best.st,test,rule:best.rule,split};
+}
+function runBacktest(){
+  const duration=+$('#botDuration').value, strategy=$('#botStrategy').value;
+  if(strategy==='walkforward'){
+    const wf=runWalkForward(duration);
+    renderWalkForward(wf,duration);
+  } else {
+    $('#walkForwardPanel').classList.add('hidden');
+    renderBotResults(runFixedBacktest(strategy,duration),duration, strategy==='validated'?'Filtro selectivo':'Balanceado');
+  }
 }
 runBotBtn?.addEventListener('click',runBacktest);
-function renderBotResults(rows,duration){
-  const wins=rows.filter(x=>x.result==='WIN').length, losses=rows.filter(x=>x.result==='LOSS').length, resolved=wins+losses;
-  $('#botRows').textContent=`${botCandles.length} velas`; $('#botSignals').textContent=rows.length; $('#botWins').textContent=wins; $('#botLosses').textContent=losses; $('#botAccuracy').textContent=resolved?`${(wins/resolved*100).toFixed(1)}%`:'—';
-  $('#botSummary').textContent=`Duración ${duration} min. DRAW no cuenta en el porcentaje. Resultado calculado con el cierre futuro solo después de generar cada señal; no se usa para decidir la entrada.`;
+function renderWalkForward(wf,duration){
+  const panel=$('#walkForwardPanel'); panel.classList.remove('hidden');
+  if(!wf.rule){
+    $('#selectedRule').textContent='No se encontró un filtro con muestra mínima suficiente en el tramo de entrenamiento.';
+    $('#trainAccuracy').textContent='—'; $('#testAccuracy').textContent='—'; $('#trainCount').textContent='0 señales'; $('#testCount').textContent='0 señales';
+    $('#validationNote').textContent='El bot no fuerza una estrategia cuando los datos de entrenamiento no alcanzan el mínimo exigido.';
+    renderBotResults([],duration,'Validación temporal'); return;
+  }
+  $('#selectedRule').textContent=ruleText(wf.rule);
+  $('#trainAccuracy').textContent=wf.train.accuracy===null?'—':`${(wf.train.accuracy*100).toFixed(1)}%`;
+  $('#testAccuracy').textContent=wf.test.accuracy===null?'—':`${(wf.test.accuracy*100).toFixed(1)}%`;
+  $('#trainCount').textContent=`${wf.train.resolved} señales resueltas`;
+  $('#testCount').textContent=`${wf.test.resolved} señales resueltas`;
+  const verdict=wf.test.resolved<20?'Muestra de prueba pequeña; no sacar conclusiones todavía.':wf.test.accuracy>=0.58?'El filtro conserva una ventaja en el tramo no usado para elegirlo. Seguir validando con datos nuevos.':wf.test.accuracy>=0.53?'Hay una ventaja modesta fuera de muestra; necesita más datos.':'El filtro no conserva una ventaja clara fuera de muestra.';
+  $('#validationNote').textContent=`Se eligió el filtro usando solo el 70% inicial del historial. El 30% final se reservó como prueba y no participó en la selección. ${verdict}`;
+  renderBotResults(wf.rows,duration,'Prueba fuera de muestra');
+}
+function renderBotResults(rows,duration,label='Backtest'){
+  const s=stats(rows);
+  $('#botRows').textContent=`${botCandles.length} velas`; $('#botSignals').textContent=rows.length; $('#botWins').textContent=s.wins; $('#botLosses').textContent=s.losses; $('#botAccuracy').textContent=s.accuracy!==null?`${(s.accuracy*100).toFixed(1)}%`:'—';
+  $('#botSummary').textContent=`${label}. Duración ${duration} min. DRAW no cuenta. La vela futura se consulta únicamente para calificar WIN/LOSS después de generar la señal.`;
   const list=$('#botSignalList'); list.innerHTML='';
-  rows.slice(-50).reverse().forEach(x=>{const d=document.createElement('div');d.className=`bot-signal-row ${x.signal.toLowerCase()}`;const dt=new Date(x.entryTime);d.innerHTML=`<div><strong>${x.signal==='BUY'?'↑ COMPRA':'↓ VENTA'} · ${dt.toLocaleString()}</strong><small>score ${x.score} · confianza análisis ${x.confidence}%</small></div><strong class="${x.result.toLowerCase()}">${x.result}</strong>`;list.appendChild(d);});
+  rows.slice(-50).reverse().forEach(x=>{const d=document.createElement('div');d.className=`bot-signal-row ${x.signal.toLowerCase()}`;const dt=new Date(x.entryTime);const confidence=x.confidence==null?'filtro histórico':`confianza análisis ${x.confidence}%`;d.innerHTML=`<div><strong>${x.signal==='BUY'?'↑ COMPRA':'↓ VENTA'} · ${dt.toLocaleString()}</strong><small>score ${x.score} · ${confidence}</small></div><strong class="${x.result.toLowerCase()}">${x.result}</strong>`;list.appendChild(d);});
   $('#botResults').classList.remove('hidden'); $('#botResults').scrollIntoView({behavior:'smooth'});
 }
