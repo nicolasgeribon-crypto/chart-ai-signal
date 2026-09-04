@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#071018" />
+  <title>Chart AI Signal</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div class="brand-mark">AI</div>
+      <div><h1>CHART AI</h1><span>SEÑALES · VISIÓN</span></div>
+      <button id="installBtn" class="install hidden" type="button">Instalar</button>
+      <div id="statusBadge" class="online"><i></i> IA</div>
+    </header>
+
+    <section class="hero">
+      <span class="eyebrow">✦ análisis visual</span>
+      <h2>Análisis con IA por captura</h2>
+      <p>Sube una captura completa del gráfico. La IA revisará estructura, tendencia y niveles visibles.</p>
+      <div class="quota">● LISTO PARA ANALIZAR</div>
+    </section>
+
+    <section class="card upload-card" id="uploadCard">
+      <input id="fileInput" type="file" accept="image/png,image/jpeg,image/webp" hidden />
+      <button id="pickBtn" class="dropzone" type="button">
+        <div class="camera">▣</div>
+        <strong>Toca para subir la captura</strong>
+        <small>PNG · JPG · WEBP · máximo 8 MB</small>
+      </button>
+      <div id="previewWrap" class="preview-wrap hidden">
+        <img id="preview" alt="Vista previa del gráfico" />
+        <button id="changeBtn" class="ghost" type="button">Cambiar captura</button>
+      </div>
+      <button id="analyzeBtn" class="primary hidden" type="button">✦ Analizar con IA</button>
+    </section>
+
+    <section id="progressCard" class="card progress-card hidden">
+      <div class="scan-wrap"><img id="scanImg" alt="Captura en análisis" /><div class="scanline"></div></div>
+      <div class="steps">
+        <div data-step="0">✓ Verificando la captura…</div>
+        <div data-step="1">○ Escaneando el mercado…</div>
+        <div data-step="2">○ Buscando patrones de velas…</div>
+        <div data-step="3">○ Detectando soporte y resistencia…</div>
+        <div data-step="4">○ Evaluando la configuración…</div>
+      </div>
+      <div class="bar"><span id="progressBar"></span></div>
+    </section>
+
+    <section id="resultCard" class="card result-card hidden">
+      <div class="result-head"><span>●●● resultado · chart-ai</span><span id="assetBadge">—</span></div>
+      <div class="signal-row">
+        <div><small>SEÑAL</small><strong id="signal">—</strong></div>
+        <div class="pill" id="signalPill">—</div>
+      </div>
+      <div class="metrics">
+        <div><small>MINUTO DE ENTRADA</small><strong id="entry">--:--</strong></div>
+        <div><small>DURACIÓN</small><strong>5 min</strong></div>
+      </div>
+      <div class="confidence">
+        <div><span>CONFIANZA DEL ANÁLISIS</span><strong id="confidenceText">0%</strong></div>
+        <div class="meter"><span id="confidenceBar"></span></div>
+      </div>
+      <div class="detail-grid">
+        <div><small>TENDENCIA</small><span id="trend">—</span></div>
+        <div><small>TIMEFRAME</small><span id="timeframe">—</span></div>
+        <div><small>SOPORTE</small><span id="support">—</span></div>
+        <div><small>RESISTENCIA</small><span id="resistance">—</span></div>
+      </div>
+      <div class="comment"><small>COMENTARIO</small><p id="reason"></p></div>
+      <div class="risk"><b>⚠ Gestión de riesgo</b><p id="riskNote">Una captura no permite predecir con certeza el próximo movimiento.</p></div>
+      <button id="anotherBtn" class="primary" type="button">Analizar otra</button>
+    </section>
+
+    <section id="errorCard" class="card error-card hidden"><b>No se pudo analizar</b><p id="errorText"></p></section>
+
+    <p class="disclaimer">Herramienta educativa de análisis visual. No garantiza resultados ni sustituye una decisión financiera informada.</p>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
