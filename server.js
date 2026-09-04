@@ -2,6 +2,7 @@ import express from 'express';
 import multer from 'multer';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { diagnoseStockity } from './stockity.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -49,6 +50,28 @@ app.get('/api/status', (_req, res) => {
     ai: Boolean(process.env.OPENAI_API_KEY),
     model: process.env.OPENAI_MODEL || 'gpt-5.6-luna'
   });
+});
+
+
+app.get('/api/stockity/status', (_req, res) => {
+  res.json({
+    configured: Boolean(process.env.STOCKITY_EMAIL && process.env.STOCKITY_PASSWORD),
+    mode: 'read-only'
+  });
+});
+
+app.post('/api/stockity/diagnose', async (_req, res) => {
+  try {
+    const result = await diagnoseStockity({
+      email: process.env.STOCKITY_EMAIL,
+      password: process.env.STOCKITY_PASSWORD
+    });
+    const status = result.credentials_present ? 200 : 503;
+    res.status(status).json(result);
+  } catch (err) {
+    console.error('Stockity diagnostic:', err);
+    res.status(500).json({ mode: 'read-only', error: 'Falló la prueba de conexión de Stockity.' });
+  }
 });
 
 app.post('/api/analyze', upload.single('chart'), async (req, res) => {
