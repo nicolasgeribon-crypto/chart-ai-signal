@@ -3,6 +3,7 @@ import multer from 'multer';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { diagnoseStockity } from './stockity.js';
+import { diagnoseBinomo } from './binomo.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -71,6 +72,28 @@ app.post('/api/stockity/diagnose', async (_req, res) => {
   } catch (err) {
     console.error('Stockity diagnostic:', err);
     res.status(500).json({ mode: 'read-only', error: 'Falló la prueba de conexión de Stockity.' });
+  }
+});
+
+
+app.get('/api/binomo/status', (_req, res) => {
+  res.json({
+    configured: Boolean(process.env.BINOMO_EMAIL && process.env.BINOMO_PASSWORD),
+    mode: 'read-only'
+  });
+});
+
+app.post('/api/binomo/diagnose', async (_req, res) => {
+  try {
+    const result = await diagnoseBinomo({
+      email: process.env.BINOMO_EMAIL,
+      password: process.env.BINOMO_PASSWORD
+    });
+    const status = result.credentials_present ? 200 : 503;
+    res.status(status).json(result);
+  } catch (err) {
+    console.error('Binomo diagnostic:', err);
+    res.status(500).json({ mode: 'read-only', error: 'Falló la prueba de conexión de Binomo.' });
   }
 });
 
