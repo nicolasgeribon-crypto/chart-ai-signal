@@ -280,7 +280,7 @@ $('#clearHistoryBtn').addEventListener('click', () => {
 renderHistory();
 refreshStatus();
 
-// --- Bot DEMO V13: MG1 selectiva optimizada por neto, drawdown y racha de pérdidas ---
+// --- Bot DEMO V14: MG1 selectiva optimizada por neto, drawdown y racha de pérdidas ---
 const botCsvInput = $('#botCsvInput');
 const botPickBtn = $('#botPickBtn');
 const runBotBtn = $('#runBotBtn');
@@ -504,21 +504,32 @@ function renderRobust(v,duration,family){
 }
 
 function mg1PolicyCandidates(){
+  const ema=(f,s)=>s==='SELL'?f.e9<f.e21:f.e9>f.e21;
+  const m3=(f,s)=>s==='SELL'?f.mom3<0:f.mom3>0;
+  const m5=(f,s)=>s==='SELL'?f.mom5<0:f.mom5>0;
+  const rsi50=(f,s)=>s==='SELL'?f.rsi<=50:f.rsi>=50;
+  const rsi48=(f,s)=>s==='SELL'?f.rsi<=48:f.rsi>=52;
+  const v4=(f,s)=>(s==='SELL'?f.down:f.up)>=4;
+  const v5=(f,s)=>(s==='SELL'?f.down:f.up)>=5;
   return [
     {id:'all',label:'Todas las pérdidas',ok:()=>true},
-    {id:'ema',label:'EMA 9/21 sigue alineada',ok:(f,signal)=>signal==='SELL'?f.e9<f.e21:f.e9>f.e21},
-    {id:'mom3',label:'Momentum 3 sigue a favor',ok:(f,signal)=>signal==='SELL'?f.mom3<0:f.mom3>0},
-    {id:'mom5',label:'Momentum 5 sigue a favor',ok:(f,signal)=>signal==='SELL'?f.mom5<0:f.mom5>0},
-    {id:'ema_mom3',label:'EMA alineada + momentum 3',ok:(f,signal)=>(signal==='SELL'?f.e9<f.e21:f.e9>f.e21)&&(signal==='SELL'?f.mom3<0:f.mom3>0)},
-    {id:'ema_mom5',label:'EMA alineada + momentum 5',ok:(f,signal)=>(signal==='SELL'?f.e9<f.e21:f.e9>f.e21)&&(signal==='SELL'?f.mom5<0:f.mom5>0)},
-    {id:'votes4',label:'Fuerza actual ≥ 4/5',ok:(f,signal)=>(signal==='SELL'?f.down:f.up)>=4},
-    {id:'ema_votes4',label:'EMA alineada + fuerza ≥ 4/5',ok:(f,signal)=>(signal==='SELL'?f.e9<f.e21:f.e9>f.e21)&&((signal==='SELL'?f.down:f.up)>=4)},
-    {id:'rsi',label:'RSI mantiene sesgo',ok:(f,signal)=>signal==='SELL'?f.rsi<=50:f.rsi>=50},
-    {id:'ema_rsi',label:'EMA alineada + RSI mantiene sesgo',ok:(f,signal)=>(signal==='SELL'?f.e9<f.e21:f.e9>f.e21)&&(signal==='SELL'?f.rsi<=50:f.rsi>=50)},
-    {id:'mom3_votes4',label:'Momentum 3 + fuerza ≥ 4/5',ok:(f,signal)=>(signal==='SELL'?f.mom3<0:f.mom3>0)&&((signal==='SELL'?f.down:f.up)>=4)}
+    {id:'mom3',label:'Momentum 3 sigue a favor',ok:m3},
+    {id:'mom5',label:'Momentum 5 sigue a favor',ok:m5},
+    {id:'ema',label:'EMA 9/21 sigue alineada',ok:ema},
+    {id:'votes4',label:'Fuerza actual ≥ 4/5',ok:v4},
+    {id:'votes5',label:'Fuerza actual = 5/5',ok:v5},
+    {id:'rsi50',label:'RSI mantiene sesgo',ok:rsi50},
+    {id:'rsi48',label:'RSI mantiene sesgo fuerte',ok:rsi48},
+    {id:'ema_mom3',label:'EMA + momentum 3',ok:(f,s)=>ema(f,s)&&m3(f,s)},
+    {id:'ema_mom5',label:'EMA + momentum 5',ok:(f,s)=>ema(f,s)&&m5(f,s)},
+    {id:'mom3_votes4',label:'Momentum 3 + fuerza ≥ 4/5',ok:(f,s)=>m3(f,s)&&v4(f,s)},
+    {id:'mom5_votes4',label:'Momentum 5 + fuerza ≥ 4/5',ok:(f,s)=>m5(f,s)&&v4(f,s)},
+    {id:'ema_votes4',label:'EMA + fuerza ≥ 4/5',ok:(f,s)=>ema(f,s)&&v4(f,s)},
+    {id:'mom3_rsi',label:'Momentum 3 + RSI fuerte',ok:(f,s)=>m3(f,s)&&rsi48(f,s)},
+    {id:'ema_mom3_rsi',label:'EMA + momentum 3 + RSI fuerte',ok:(f,s)=>ema(f,s)&&m3(f,s)&&rsi48(f,s)},
+    {id:'ema_mom3_votes4',label:'EMA + momentum 3 + fuerza ≥ 4/5',ok:(f,s)=>ema(f,s)&&m3(f,s)&&v4(f,s)}
   ];
 }
-
 function martingale1Stats(rows,duration,policy=null){
   const chosen=policy||mg1PolicyCandidates()[0];
   let cycleWins=0,cycleLosses=0,mgUsed=0,mgSkipped=0,mgWins=0,mgLosses=0,netUnits=0;
@@ -557,11 +568,26 @@ function martingale1Stats(rows,duration,policy=null){
 }
 function selectMg1Policy(devRows,duration){
   const candidates=mg1PolicyCandidates().map(policy=>({policy,stats:martingale1Stats(devRows,duration,policy)}));
-  const eligible=candidates.filter(x=>x.stats.mgUsed>=12);
-  const pool=eligible.length?eligible:candidates;
-  const riskScore=x=>x.stats.unitsPerCycle-0.012*x.stats.maxDrawdown-0.008*x.stats.maxLossStreak;
-  pool.sort((a,b)=>riskScore(b)-riskScore(a)||b.stats.netUnits-a.stats.netUnits||((b.stats.accuracy||0)-(a.stats.accuracy||0)));
-  return {policy:pool[0]?.policy||mg1PolicyCandidates()[0],ranking:pool.slice(0,4)};
+  const enough=candidates.filter(x=>x.stats.mgUsed>=10);
+
+  // V14: objetivos de riesgo medidos SOLO en desarrollo+confirmación.
+  // No se mira el 30% final para elegir la política.
+  const strict=enough.filter(x=>x.stats.maxDrawdown<=8 && x.stats.maxLossStreak<=2 && x.stats.netUnits>0);
+  const relaxed=enough.filter(x=>x.stats.maxDrawdown<=10 && x.stats.maxLossStreak<=3 && x.stats.netUnits>0);
+  const pool=strict.length?strict:(relaxed.length?relaxed:(enough.length?enough:candidates));
+
+  const score=x=>{
+    const s=x.stats;
+    // Prioriza neto por ciclo, pero castiga con fuerza DD y rachas.
+    return (s.unitsPerCycle*100) + s.netUnits*0.20 - s.maxDrawdown*0.90 - s.maxLossStreak*1.50;
+  };
+  pool.sort((a,b)=>score(b)-score(a)||b.stats.netUnits-a.stats.netUnits||((b.stats.accuracy||0)-(a.stats.accuracy||0)));
+
+  return {
+    policy:pool[0]?.policy||mg1PolicyCandidates()[0],
+    ranking:pool.slice(0,5),
+    riskTier:strict.length?'OBJETIVO DD≤8 / RACHA≤2':(relaxed.length?'RELajado DD≤10 / RACHA≤3':'SIN CANDIDATO DENTRO DEL LÍMITE')
+  };
 }
 function renderBotResults(rows,duration,label='Backtest',mgSelection=null){
   const s=stats(rows);
@@ -577,7 +603,7 @@ function renderBotResults(rows,duration,label='Backtest',mgSelection=null){
   $('#mg1Used').textContent=mg.mgUsed;
   $('#mg1Note').textContent=`Filtro MG1 elegido: ${mg.policy.label}. MG1 usado ${mg.mgUsed} veces y omitido ${mg.mgSkipped}: ${mg.mgWins} WIN / ${mg.mgLosses} LOSS en MG1. Neto teórico ${mg.netUnits>=0?'+':''}${mg.netUnits.toFixed(0)} unidades; drawdown máximo ${mg.maxDrawdown.toFixed(0)}u; racha máxima ${mg.maxLossStreak} ciclos perdidos. Simulación con pago 1:1 (1 inicial y 2 en MG1).`;
   const rank=mgSelection?.ranking||[];
-  $('#mg1Compare').textContent=rank.length?`Ranking elegido SOLO en desarrollo+confirmación: ${rank.map((x,i)=>`${i+1}) ${x.policy.label}: ${x.stats.netUnits>=0?'+':''}${x.stats.netUnits.toFixed(0)}u, DD ${x.stats.maxDrawdown.toFixed(0)}u, racha ${x.stats.maxLossStreak}`).join(' · ')}. El 30% final no participa en la selección.`:'Sin ranking de políticas para este modo.';
+  $('#mg1Compare').textContent=rank.length?`V14 ${mgSelection?.riskTier||''}. Ranking elegido SOLO en desarrollo+confirmación: ${rank.map((x,i)=>`${i+1}) ${x.policy.label}: ${x.stats.netUnits>=0?'+':''}${x.stats.netUnits.toFixed(0)}u, DD ${x.stats.maxDrawdown.toFixed(0)}u, racha ${x.stats.maxLossStreak}`).join(' · ')}. El 30% final NO participa en la selección.`:'Sin ranking de políticas para este modo.';
   const list=$('#botSignalList'); list.innerHTML='';
   rows.slice(-50).reverse().forEach(x=>{const d=document.createElement('div');d.className=`bot-signal-row ${x.signal.toLowerCase()}`;const dt=new Date(x.entryTime);const confidence=x.confidence==null?(x.entryType||'filtro histórico'):`confianza análisis ${x.confidence}%`;d.innerHTML=`<div><strong>${x.signal==='BUY'?'↑ COMPRA':'↓ VENTA'} · ${dt.toLocaleString()}</strong><small>score ${x.score} · ${confidence}</small></div><strong class="${x.result.toLowerCase()}">${x.result}</strong>`;list.appendChild(d);});
   $('#botResults').classList.remove('hidden'); $('#botResults').scrollIntoView({behavior:'smooth'});
