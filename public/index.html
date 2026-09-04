@@ -21,8 +21,8 @@
 
     <section class="hero capture-only">
       <div class="mode-tabs"><button class="mode-tab active" data-mode="capture">📸 CAPTURA</button><button class="mode-tab" data-mode="bot">🤖 BOT DEMO</button></div><span class="eyebrow">✦ análisis visual</span>
-      <h2>Análisis con IA por captura</h2>
-      <p>Sube una captura completa del gráfico. La IA revisará estructura, tendencia y niveles visibles.</p>
+      <h2>Análisis IA · gráfico 5 minutos</h2>
+      <p>Sube una captura completa con el gráfico en 5m. La IA evaluará estructura, retroceso, impulso, rechazo y niveles visibles.</p>
       <div class="quota">● LISTO PARA ANALIZAR</div>
     </section>
 
@@ -73,7 +73,7 @@
         <div><small>SOPORTE</small><span id="support">—</span></div>
         <div><small>RESISTENCIA</small><span id="resistance">—</span></div>
       </div>
-      <div class="setup-box"><small>CONFIGURACIÓN DETECTADA</small><p id="setupText">—</p></div>
+      <div class="setup-box"><small>CONFIGURACIÓN 5M / QUÉ FALTA</small><p id="setupText">—</p></div>
       <div class="comment"><small>COMENTARIO</small><p id="reason"></p></div>
       <div class="invalidation"><small>SE INVALIDA SI</small><p id="invalidationText">—</p></div>
       <div class="risk"><b>⚠ Gestión de riesgo</b><p id="riskNote">Una captura no permite predecir con certeza el próximo movimiento.</p></div>
@@ -86,7 +86,7 @@
     <section id="botSection" class="hidden">
       <section class="hero bot-hero">
         <span class="eyebrow">🤖 laboratorio de señales</span>
-        <h2>Bot DEMO V19</h2>
+        <h2>Bot DEMO V20</h2>
         <p>Prueba la lógica con un CSV de velas históricas. El backtest usa solo velas anteriores. V19 añade candidatos para filtrar la entrada inicial antes de MG1. La selección se hace solo con desarrollo+confirmación; payout real y el 30% final permanecen como prueba fuera de muestra.</p>
       </section>
       <section class="card bot-card">
@@ -95,7 +95,7 @@
         <div id="botFileInfo" class="bot-file-info hidden"></div>
         <div class="bot-controls">
           <label>Duración<select id="botDuration"><option value="1">1 minuto</option><option value="5">5 minutos</option></select></label>
-          <label>Modo<select id="botStrategy"><option value="pullback">Retroceso robusto (V19)</option><option value="robust">Validación robusta mixta</option><option value="validated">Filtro selectivo</option><option value="balanced">Balanceado</option></select></label>
+          <label>Modo<select id="botStrategy"><option value="pullback">Retroceso robusto (V20)</option><option value="robust">Validación robusta mixta</option><option value="validated">Filtro selectivo</option><option value="balanced">Balanceado</option></select></label>
         </div>
         <div style="margin:14px 0"><label for="payoutPct">Payout real (%)</label><input id="payoutPct" type="number" min="1" max="100" value="82" inputmode="decimal" style="width:100%;box-sizing:border-box;margin-top:7px;padding:14px;border-radius:12px;border:1px solid #24434a;background:#071820;color:#e9f4f1;font-size:18px"><small style="display:block;margin-top:7px;opacity:.72">Pon el porcentaje que muestra la plataforma. Ej.: 82.</small></div><button id="runBotBtn" class="primary hidden" type="button">▶ Ejecutar backtest DEMO</button>
         <p class="bot-note">El porcentaje mostrado es histórico sobre el archivo cargado; no garantiza resultados futuros. No ejecuta operaciones.</p>
