@@ -1,12 +1,7 @@
-# Chart AI Signal V15
+# Chart AI Signal V16
 
-V15 compara dos perfiles de Martingala 1 sin usar el 30% final para escogerlos.
+V16 amplía las reglas para decidir cuándo usar Martingala 1 y compara tres perfiles: Conservador, Neto+ y Adaptativo.
 
-- **Conservador:** prioriza menor racha y drawdown, manteniendo neto positivo.
-- **Neto+:** permite hasta 4 ciclos perdidos consecutivos y DD de hasta 10 unidades en desarrollo+confirmación para buscar mayor neto.
-- Después, ambos perfiles se congelan y se evalúan por separado en el 30% final fuera de muestra.
-- La pantalla muestra neto, acierto de ciclos, drawdown, racha máxima y cantidad de MG1 de cada perfil.
+La selección usa solamente desarrollo + confirmación. El 30% final queda fuera de muestra. El perfil Adaptativo penaliza drawdown y rachas de pérdidas además de valorar el neto teórico.
 
-Esto permite comprobar si aceptar más riesgo realmente mejora el resultado en datos no usados para elegir la regla.
-
-Simulación histórica/educativa con supuesto 1:1: 1 unidad inicial y 2 unidades en MG1. No garantiza resultados futuros ni ejecuta operaciones.
+Simulación educativa; no garantiza resultados futuros ni ejecuta operaciones.
