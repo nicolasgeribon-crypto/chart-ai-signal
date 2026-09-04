@@ -280,7 +280,7 @@ $('#clearHistoryBtn').addEventListener('click', () => {
 renderHistory();
 refreshStatus();
 
-// --- Bot DEMO V10: retroceso + confirmación de rechazo antes de entrar ---
+// --- Bot DEMO V9: validación robusta + entradas con retroceso ---
 const botCsvInput = $('#botCsvInput');
 const botPickBtn = $('#botPickBtn');
 const runBotBtn = $('#runBotBtn');
@@ -339,7 +339,7 @@ function featureAt(candles,i){
   const rangeRatio=range/Math.max(1e-12,avgRange);
   const down=(c.close<e9)+(e9<e21)+(rv<48)+(mom3<0)+(c.close<c.open);
   const up=(c.close>e9)+(e9>e21)+(rv>52)+(mom3>0)+(c.close>c.open);
-  return {e9,e21,rsi:rv,mom3,mom5,impulseBeforePullback,up,down,recentUp,recentDown,pullbackUp,pullbackDown,prevHigh,prevLow,c,bodyFrac,upperWick,lowerWick,rangeRatio,avgRange,prevClose:candles[i-1].close,prevCandleHigh:candles[i-1].high,prevCandleLow:candles[i-1].low};
+  return {e9,e21,rsi:rv,mom3,mom5,impulseBeforePullback,up,down,recentUp,recentDown,pullbackUp,pullbackDown,prevHigh,prevLow,c,bodyFrac,upperWick,lowerWick,rangeRatio,avgRange,prevClose:candles[i-1].close};
 }
 
 async function buildFeatureCacheAsync(){
@@ -364,19 +364,12 @@ function pullbackMatch(f,r){
   if(r.direction==='SELL'){
     if(!(f.e9<f.e21) || !(f.impulseBeforePullback<0)) return false;
     if(f.pullbackUp < (r.pullback==='deep'?2:1)) return false;
-    // V10: no entrar apenas termina el retroceso. La vela actual debe confirmar
-    // rechazo bajista cerrando por debajo del mínimo de la vela anterior.
-    if(!(f.c.close<f.c.open) || !(f.c.close<f.prevCandleLow)) return false;
-    // Evita confirmaciones con mecha superior excesiva o cuerpo demasiado débil.
-    if(f.bodyFrac<0.35 || f.upperWick>0.45) return false;
+    if(!(f.c.close<f.c.open) || !(f.c.close<f.prevClose)) return false;
     if(r.pullback==='ema' && !(f.prevHigh>=f.e9 && f.c.close<f.e9)) return false;
   } else {
     if(!(f.e9>f.e21) || !(f.impulseBeforePullback>0)) return false;
     if(f.pullbackDown < (r.pullback==='deep'?2:1)) return false;
-    // Confirmación alcista: cierre por encima del máximo de la vela anterior.
-    if(!(f.c.close>f.c.open) || !(f.c.close>f.prevCandleHigh)) return false;
-    // Evita confirmaciones con mecha inferior excesiva o cuerpo demasiado débil.
-    if(f.bodyFrac<0.35 || f.lowerWick>0.45) return false;
+    if(!(f.c.close>f.c.open) || !(f.c.close>f.prevClose)) return false;
     if(r.pullback==='ema' && !(f.prevLow<=f.e9 && f.c.close>f.e9)) return false;
   }
   return true;
@@ -427,7 +420,7 @@ function wilsonLower(w,n,z=1.64){if(!n)return 0;const p=w/n,zz=z*z;return (p+zz/
 function ruleText(r){
   const dir=r.direction==='SELL'?'VENTA':'COMPRA';
   const pb=r.pullback==='none'?'continuación directa':r.pullback==='ema'?'retroceso a EMA9':r.pullback==='deep'?'retroceso 2+ velas':'retroceso 1–3 velas';
-  return `${dir} · ${pb} + confirmación · fuerza ≥ ${r.votes}/5 · ${r.direction==='SELL'?`RSI ≤ ${r.rsiGate}`:`RSI ≥ ${r.rsiGate}`} · momentum ${r.momentum} · cuerpo ≥ ${Math.round(r.bodyMin*100)}% · rango ≥ ${r.rangeMin.toFixed(1)}×`;
+  return `${dir} · ${pb} · fuerza ≥ ${r.votes}/5 · ${r.direction==='SELL'?`RSI ≤ ${r.rsiGate}`:`RSI ≥ ${r.rsiGate}`} · momentum ${r.momentum} · cuerpo ≥ ${Math.round(r.bodyMin*100)}% · rango ≥ ${r.rangeMin.toFixed(1)}×`;
 }
 function scoreCandidate(a,b){
   if(!a.resolved||!b.resolved)return -1;
@@ -508,10 +501,43 @@ function renderRobust(v,duration,family){
   renderBotResults(v.rows,duration,v.mode==='validated'?'Prueba final fuera de muestra':'Diagnóstico final fuera de muestra');
 }
 
+function martingale1Stats(rows,duration){
+  let cycleWins=0, cycleLosses=0, mgUsed=0, mgWins=0, mgLosses=0, netUnits=0;
+  const details=[];
+  for(const x of rows){
+    if(x.result==='DRAW') continue;
+    if(x.result==='WIN'){
+      cycleWins++; netUnits+=1;
+      details.push({...x,mg1:'NO',cycleResult:'WIN'});
+      continue;
+    }
+    mgUsed++;
+    const mgIndex=x.entryIndex+duration;
+    const mgResult=resultFor(botCandles,mgIndex,duration,x.signal);
+    if(mgResult==='WIN'){
+      mgWins++; cycleWins++; netUnits+=1; // -1 primera +2 MG, pago 1:1
+      details.push({...x,mg1:'WIN',cycleResult:'WIN'});
+    } else if(mgResult==='LOSS'){
+      mgLosses++; cycleLosses++; netUnits-=3; // -1 primera -2 MG
+      details.push({...x,mg1:'LOSS',cycleResult:'LOSS'});
+    } else {
+      // Si el MG queda DRAW/no resoluble, conserva la pérdida inicial y no lo cuenta como ciclo resuelto MG.
+      netUnits-=1;
+      details.push({...x,mg1:'DRAW',cycleResult:'DRAW'});
+    }
+  }
+  const cycles=cycleWins+cycleLosses;
+  return {cycles,cycleWins,cycleLosses,accuracy:cycles?cycleWins/cycles:null,mgUsed,mgWins,mgLosses,netUnits,details};
+}
+
 function renderBotResults(rows,duration,label='Backtest'){
   const s=stats(rows);
   $('#botRows').textContent=`${botCandles.length} velas`; $('#botSignals').textContent=rows.length; $('#botWins').textContent=s.wins; $('#botLosses').textContent=s.losses; $('#botAccuracy').textContent=s.accuracy!==null?`${(s.accuracy*100).toFixed(1)}%`:'—';
   $('#botSummary').textContent=`${label}. Duración ${duration} min. DRAW no cuenta. La vela futura solo se usa después para calificar WIN/LOSS.`;
+  const mg=martingale1Stats(rows,duration);
+  $('#mg1Cycles').textContent=mg.cycles; $('#mg1Wins').textContent=mg.cycleWins; $('#mg1Losses').textContent=mg.cycleLosses;
+  $('#mg1Accuracy').textContent=mg.accuracy!==null?`${(mg.accuracy*100).toFixed(1)}%`:'—';
+  $('#mg1Note').textContent=`MG1 usado ${mg.mgUsed} veces: ${mg.mgWins} WIN / ${mg.mgLosses} LOSS. Neto teórico ${mg.netUnits>=0?'+':''}${mg.netUnits.toFixed(0)} unidades con pago 1:1 (1 unidad inicial y 2 en MG1). El porcentaje de ciclos puede subir aunque el riesgo por ciclo aumenta a 3 unidades.`;
   const list=$('#botSignalList'); list.innerHTML='';
   rows.slice(-50).reverse().forEach(x=>{const d=document.createElement('div');d.className=`bot-signal-row ${x.signal.toLowerCase()}`;const dt=new Date(x.entryTime);const confidence=x.confidence==null?(x.entryType||'filtro histórico'):`confianza análisis ${x.confidence}%`;d.innerHTML=`<div><strong>${x.signal==='BUY'?'↑ COMPRA':'↓ VENTA'} · ${dt.toLocaleString()}</strong><small>score ${x.score} · ${confidence}</small></div><strong class="${x.result.toLowerCase()}">${x.result}</strong>`;list.appendChild(d);});
   $('#botResults').classList.remove('hidden'); $('#botResults').scrollIntoView({behavior:'smooth'});
