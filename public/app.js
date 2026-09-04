@@ -280,7 +280,7 @@ $('#clearHistoryBtn').addEventListener('click', () => {
 renderHistory();
 refreshStatus();
 
-// --- Bot DEMO V15: MG1 selectiva optimizada por neto, drawdown y racha de pérdidas ---
+// --- Bot DEMO V16: MG1 selectiva optimizada por neto, drawdown y racha de pérdidas ---
 const botCsvInput = $('#botCsvInput');
 const botPickBtn = $('#botPickBtn');
 const runBotBtn = $('#runBotBtn');
@@ -527,7 +527,13 @@ function mg1PolicyCandidates(){
     {id:'ema_votes4',label:'EMA + fuerza ≥ 4/5',ok:(f,s)=>ema(f,s)&&v4(f,s)},
     {id:'mom3_rsi',label:'Momentum 3 + RSI fuerte',ok:(f,s)=>m3(f,s)&&rsi48(f,s)},
     {id:'ema_mom3_rsi',label:'EMA + momentum 3 + RSI fuerte',ok:(f,s)=>ema(f,s)&&m3(f,s)&&rsi48(f,s)},
-    {id:'ema_mom3_votes4',label:'EMA + momentum 3 + fuerza ≥ 4/5',ok:(f,s)=>ema(f,s)&&m3(f,s)&&v4(f,s)}
+    {id:'ema_mom3_votes4',label:'EMA + momentum 3 + fuerza ≥ 4/5',ok:(f,s)=>ema(f,s)&&m3(f,s)&&v4(f,s)},
+    {id:'mom3_body',label:'Momentum 3 + cuerpo ≥ 35%',ok:(f,s)=>m3(f,s)&&f.bodyPct>=0.35},
+    {id:'mom3_range',label:'Momentum 3 + rango ≥ 0.9× media',ok:(f,s)=>m3(f,s)&&f.rangeRatio>=0.9},
+    {id:'mom3_body_range',label:'Momentum 3 + cuerpo ≥ 35% + rango ≥ 0.9×',ok:(f,s)=>m3(f,s)&&f.bodyPct>=0.35&&f.rangeRatio>=0.9},
+    {id:'ema_mom3_body',label:'EMA + momentum 3 + cuerpo ≥ 35%',ok:(f,s)=>ema(f,s)&&m3(f,s)&&f.bodyPct>=0.35},
+    {id:'mom3_not_stretched',label:'Momentum 3 + RSI no extremo',ok:(f,s)=>m3(f,s)&&(s==='SELL'?f.rsi>=25:f.rsi<=75)},
+    {id:'ema_mom3_not_stretched',label:'EMA + momentum 3 + RSI no extremo',ok:(f,s)=>ema(f,s)&&m3(f,s)&&(s==='SELL'?f.rsi>=25:f.rsi<=75)}
   ];
 }
 function martingale1Stats(rows,duration,policy=null){
@@ -592,12 +598,22 @@ function selectMg1Policy(devRows,duration){
   );
   const netPlus=np[0];
 
+  // V16 ADAPTATIVO: premia neto y penaliza drawdown/rachas; solo usa desarrollo+confirmación.
+  const adaptivePool=base.filter(x=>x.stats.netUnits>0 && x.stats.maxDrawdown<=10 && x.stats.maxLossStreak<=3);
+  const ap=adaptivePool.length?adaptivePool:base;
+  ap.sort((a,b)=>{
+    const score=x=>x.stats.netUnits - 0.75*x.stats.maxDrawdown - 2*x.stats.maxLossStreak + 4*(x.stats.accuracy||0);
+    return score(b)-score(a) || b.stats.netUnits-a.stats.netUnits;
+  });
+  const adaptive=ap[0];
+
   return {
-    policy:conservative?.policy||mg1PolicyCandidates()[0],
+    policy:adaptive?.policy||conservative?.policy||mg1PolicyCandidates()[0],
     conservative,
     netPlus,
-    ranking:[conservative,netPlus].filter(Boolean),
-    riskTier:'DOS PERFILES: CONSERVADOR vs NETO+'
+    adaptive,
+    ranking:[conservative,netPlus,adaptive].filter(Boolean),
+    riskTier:'TRES PERFILES: CONSERVADOR vs NETO+ vs ADAPTATIVO'
   };
 }
 function renderBotResults(rows,duration,label='Backtest',mgSelection=null){
@@ -608,6 +624,7 @@ function renderBotResults(rows,duration,label='Backtest',mgSelection=null){
   const mg=martingale1Stats(rows,duration,selectedPolicy);
   const mgConservative=mgSelection?.conservative?martingale1Stats(rows,duration,mgSelection.conservative.policy):mg;
   const mgNetPlus=mgSelection?.netPlus?martingale1Stats(rows,duration,mgSelection.netPlus.policy):mg;
+  const mgAdaptive=mgSelection?.adaptive?martingale1Stats(rows,duration,mgSelection.adaptive.policy):mg;
   $('#mg1Cycles').textContent=mg.cycles; $('#mg1Wins').textContent=mg.cycleWins; $('#mg1Losses').textContent=mg.cycleLosses;
   $('#mg1Accuracy').textContent=mg.accuracy!==null?`${(mg.accuracy*100).toFixed(1)}%`:'—';
   $('#mg1Net').textContent=`${mg.netUnits>=0?'+':''}${mg.netUnits.toFixed(0)} u`;
@@ -616,11 +633,11 @@ function renderBotResults(rows,duration,label='Backtest',mgSelection=null){
   $('#mg1Used').textContent=mg.mgUsed;
   $('#mg1Note').textContent=`Filtro MG1 elegido: ${mg.policy.label}. MG1 usado ${mg.mgUsed} veces y omitido ${mg.mgSkipped}: ${mg.mgWins} WIN / ${mg.mgLosses} LOSS en MG1. Neto teórico ${mg.netUnits>=0?'+':''}${mg.netUnits.toFixed(0)} unidades; drawdown máximo ${mg.maxDrawdown.toFixed(0)}u; racha máxima ${mg.maxLossStreak} ciclos perdidos. Simulación con pago 1:1 (1 inicial y 2 en MG1).`;
   const rank=mgSelection?.ranking||[];
-  $('#mg1Compare').textContent=rank.length?`V14 ${mgSelection?.riskTier||''}. Ranking elegido SOLO en desarrollo+confirmación: ${rank.map((x,i)=>`${i+1}) ${x.policy.label}: ${x.stats.netUnits>=0?'+':''}${x.stats.netUnits.toFixed(0)}u, DD ${x.stats.maxDrawdown.toFixed(0)}u, racha ${x.stats.maxLossStreak}`).join(' · ')}. El 30% final NO participa en la selección.`:'Sin ranking de políticas para este modo.';
+  $('#mg1Compare').textContent=rank.length?`V16 ${mgSelection?.riskTier||''}. Ranking elegido SOLO en desarrollo+confirmación: ${rank.map((x,i)=>`${i+1}) ${x.policy.label}: ${x.stats.netUnits>=0?'+':''}${x.stats.netUnits.toFixed(0)}u, DD ${x.stats.maxDrawdown.toFixed(0)}u, racha ${x.stats.maxLossStreak}`).join(' · ')}. El 30% final NO participa en la selección.`:'Sin ranking de políticas para este modo.';
   const profileEl=$('#mg1Profiles');
   if(profileEl){
     const fmt=x=>`${x.netUnits>=0?'+':''}${x.netUnits.toFixed(0)}u · ciclos ${x.accuracy!==null?(x.accuracy*100).toFixed(1)+'%':'—'} · DD ${x.maxDrawdown.toFixed(0)}u · racha ${x.maxLossStreak} · MG1 ${x.mgUsed}`;
-    profileEl.textContent=`CONSERVADOR [${mgConservative.policy.label}]: ${fmt(mgConservative)}. NETO+ [${mgNetPlus.policy.label}]: ${fmt(mgNetPlus)}. Ambos filtros fueron elegidos sin mirar este 30% final.`;
+    profileEl.textContent=`CONSERVADOR [${mgConservative.policy.label}]: ${fmt(mgConservative)}. NETO+ [${mgNetPlus.policy.label}]: ${fmt(mgNetPlus)}. ADAPTATIVO [${mgAdaptive.policy.label}]: ${fmt(mgAdaptive)}. Los tres filtros fueron elegidos sin mirar este 30% final.`;
   }
   const list=$('#botSignalList'); list.innerHTML='';
   rows.slice(-50).reverse().forEach(x=>{const d=document.createElement('div');d.className=`bot-signal-row ${x.signal.toLowerCase()}`;const dt=new Date(x.entryTime);const confidence=x.confidence==null?(x.entryType||'filtro histórico'):`confianza análisis ${x.confidence}%`;d.innerHTML=`<div><strong>${x.signal==='BUY'?'↑ COMPRA':'↓ VENTA'} · ${dt.toLocaleString()}</strong><small>score ${x.score} · ${confidence}</small></div><strong class="${x.result.toLowerCase()}">${x.result}</strong>`;list.appendChild(d);});
