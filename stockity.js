@@ -41,6 +41,42 @@ function bodyFingerprint(text, body) {
   return result;
 }
 
+
+function sanitizedErrors(body) {
+  const errors = body?.errors;
+  if (errors == null) return null;
+
+  const blockedKey = /email|password|token|secret|cookie|authorization|credential/i;
+  const redactText = (value) => {
+    let text = String(value ?? '');
+    // Remove email-like strings and long opaque values that could contain identifiers/tokens.
+    text = text.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[redacted-email]');
+    text = text.replace(/\b[A-Za-z0-9_-]{32,}\b/g, '[redacted-value]');
+    return text.slice(0, 220);
+  };
+
+  const walk = (value, depth = 0) => {
+    if (depth > 3) return '[truncated]';
+    if (value == null || typeof value === 'boolean' || typeof value === 'number') return value;
+    if (typeof value === 'string') return redactText(value);
+    if (Array.isArray(value)) return value.slice(0, 8).map(v => walk(v, depth + 1));
+    if (typeof value === 'object') {
+      const out = {};
+      for (const [key, val] of Object.entries(value).slice(0, 12)) {
+        if (blockedKey.test(key)) {
+          out[key] = '[redacted]';
+        } else {
+          out[key] = walk(val, depth + 1);
+        }
+      }
+      return out;
+    }
+    return redactText(value);
+  };
+
+  return walk(errors);
+}
+
 function collectSetCookies(headers) {
   if (typeof headers.getSetCookie === 'function') return headers.getSetCookie();
   const single = headers.get('set-cookie');
@@ -82,7 +118,8 @@ async function attemptLogin({ platform, deviceId, email, password, locale, prefl
       http_status: resp.status,
       headers: safeHeaderSubset(resp.headers),
       response: bodyFingerprint(text, body),
-      authtoken_present: Boolean(authToken)
+      authtoken_present: Boolean(authToken),
+      errors_sanitized: sanitizedErrors(body)
     }
   };
 }
@@ -93,7 +130,7 @@ export async function diagnoseStockity({ email, password }) {
   const platform = 'stockity.id';
 
   const result = {
-    version: 'v24-auth-diagnostic',
+    version: 'v25-auth-error-diagnostic',
     mode: 'read-only',
     platform,
     credentials_present: Boolean(email && password),
