@@ -1,4 +1,4 @@
-# Chart AI Signal v2
+# Chart AI Signal v5 v3
 
 Aplicación web instalable (PWA) para Android que recibe una captura de un gráfico y usa visión de OpenAI para devolver una lectura visual estructurada: COMPRA, VENTA o NO OPERAR; minuto sugerido; duración fija de 5 minutos; confianza visual; tendencia; soporte; resistencia y explicación.
 
@@ -21,3 +21,20 @@ El proyecto incluye `render.yaml` para facilitar el despliegue en un servicio No
 ## Importante
 
 La aplicación analiza únicamente la información visible en una captura. La confianza mostrada representa claridad del análisis visual, no probabilidad de ganancia. La app no ejecuta operaciones ni puede garantizar resultados.
+
+
+## Cambios v3
+- Señales COMPRA/VENTA con flechas visuales.
+- Hora de entrada y duración de 5 minutos destacadas.
+- Bloques de configuración detectada e invalidación.
+- ESPERAR se mantiene cuando no hay una entrada clara.
+
+
+## Novedades v4
+- Muestra hora de inicio y hora de finalización de cada entrada (5 minutos).
+- Guarda en el navegador un historial de hasta 50 entradas COMPRA/VENTA.
+- El historial permanece en ese dispositivo/navegador hasta que se borren sus datos o se pulse “Borrar”.
+
+
+## Historial demo v5
+Cada señal COMPRA/VENTA se guarda como PENDIENTE. Al finalizar la operación, el usuario puede marcarla manualmente como WIN o LOSS. La app calcula la acertividad como WIN / (WIN + LOSS); las pendientes no cuentan. El historial se guarda localmente en el navegador del dispositivo.

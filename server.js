@@ -37,6 +37,13 @@ function safeTimezone(tz) {
   }
 }
 
+function addMinutesToHHMM(value, minutes) {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(String(value || ''));
+  if (!match) return '--:--';
+  const total = ((Number(match[1]) * 60 + Number(match[2]) + minutes) % 1440 + 1440) % 1440;
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+}
+
 app.get('/api/status', (_req, res) => {
   res.json({
     ai: Boolean(process.env.OPENAI_API_KEY),
@@ -100,6 +107,8 @@ Devuelve únicamente JSON válido con esta forma exacta:
   "support": "texto breve o No visible",
   "resistance": "texto breve o No visible",
   "reason": "explicación breve en español",
+  "setup": "texto breve describiendo la configuración visible o Sin configuración clara",
+  "invalidation": "texto breve indicando qué invalidaría la lectura o No aplica",
   "risk_note": "La lectura se basa solo en una captura y no garantiza el movimiento futuro del precio."
 }`;
 
@@ -137,9 +146,11 @@ Devuelve únicamente JSON válido con esta forma exacta:
     result.confidence = Math.max(0, Math.min(100, Number(result.confidence) || 0));
     if (!['BUY', 'SELL', 'WAIT'].includes(result.signal)) result.signal = 'WAIT';
     if (result.signal === 'WAIT') result.entry_time = '--:--';
+    result.exit_time = result.signal === 'WAIT' ? '--:--' : addMinutesToHHMM(result.entry_time, 5);
     if (!result.valid_chart) {
       result.signal = 'WAIT';
       result.entry_time = '--:--';
+      result.exit_time = '--:--';
     }
 
     res.json(result);
