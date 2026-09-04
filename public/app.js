@@ -503,6 +503,51 @@ function renderRobust(v,duration,family){
   renderBotResults(v.rows,duration,v.mode==='validated'?'Prueba final fuera de muestra':'Diagnóstico final fuera de muestra',mgSelection);
 }
 
+
+function v19EntryFilterCandidates(){
+  const ema=(f,s)=>s==='SELL'?f.e9<f.e21:f.e9>f.e21;
+  const m3=(f,s)=>s==='SELL'?f.mom3<0:f.mom3>0;
+  const m5=(f,s)=>s==='SELL'?f.mom5<0:f.mom5>0;
+  const rsiSafe=(f,s)=>s==='SELL'?(f.rsi>=28&&f.rsi<=48):(f.rsi<=72&&f.rsi>=52);
+  const force3=(f,s)=>(s==='SELL'?f.down:f.up)>=3;
+  const force4=(f,s)=>(s==='SELL'?f.down:f.up)>=4;
+  return [
+    {id:'base',label:'Base sin filtro extra',ok:()=>true},
+    {id:'ema',label:'EMA alineada',ok:ema},
+    {id:'m3',label:'Momentum 3 a favor',ok:m3},
+    {id:'ema_m3',label:'EMA + momentum 3',ok:(f,s)=>ema(f,s)&&m3(f,s)},
+    {id:'ema_m3_f3',label:'EMA + momentum 3 + fuerza ≥3/5',ok:(f,s)=>ema(f,s)&&m3(f,s)&&force3(f,s)},
+    {id:'ema_m3_f4',label:'EMA + momentum 3 + fuerza ≥4/5',ok:(f,s)=>ema(f,s)&&m3(f,s)&&force4(f,s)},
+    {id:'m3_rsi',label:'Momentum 3 + RSI seguro',ok:(f,s)=>m3(f,s)&&rsiSafe(f,s)},
+    {id:'ema_m3_rsi',label:'EMA + momentum 3 + RSI seguro',ok:(f,s)=>ema(f,s)&&m3(f,s)&&rsiSafe(f,s)},
+    {id:'m5_rsi',label:'Momentum 5 + RSI seguro',ok:(f,s)=>m5(f,s)&&rsiSafe(f,s)}
+  ];
+}
+
+// V19: filtro previo de entrada. Se selecciona SOLO con desarrollo+confirmación.
+// No usa el 30% final para elegir la regla.
+function selectV19EntryFilter(rows){
+  const candidates=v19EntryFilterCandidates().map(policy=>{
+    let n=0,w=0,l=0;
+    for(const r of rows){
+      const f=r.features||r.f||r;
+      const side=r.side||r.signal;
+      const outcome=r.outcome||r.result;
+      if(!f||!side||!policy.ok(f,side)) continue;
+      if(outcome!=='WIN'&&outcome!=='LOSS') continue;
+      n++;
+      if(outcome==='WIN') w++; else l++;
+    }
+    const hit=n?w/n:0;
+    return {policy,n,w,l,hit};
+  });
+  // Evita filtros diminutos. Premia tasa de acierto y muestra, sin mirar test final.
+  const eligible=candidates.filter(x=>x.n>=40);
+  const pool=eligible.length?eligible:candidates;
+  pool.sort((a,b)=>(b.hit-a.hit) || (b.n-a.n));
+  return pool[0]||candidates[0];
+}
+
 function mg1PolicyCandidates(){
   const ema=(f,s)=>s==='SELL'?f.e9<f.e21:f.e9>f.e21;
   const m3=(f,s)=>s==='SELL'?f.mom3<0:f.mom3>0;
@@ -643,7 +688,7 @@ function renderBotResults(rows,duration,label='Backtest',mgSelection=null){
   $('#mg1Used').textContent=mg.mgUsed;
   $('#mg1Note').textContent=`Filtro MG1 elegido: ${mg.policy.label}. MG1 usado ${mg.mgUsed} veces y omitido ${mg.mgSkipped}: ${mg.mgWins} WIN / ${mg.mgLosses} LOSS en MG1. Neto teórico ${mg.netUnits>=0?'+':''}${mg.netUnits.toFixed(0)} unidades; drawdown máximo ${mg.maxDrawdown.toFixed(0)}u; racha máxima ${mg.maxLossStreak} ciclos perdidos. Payout ${Math.round(mg.payout*100)}%. Entrada 1u; MG1 ${mg.mgStake.toFixed(2)}u.`;
   const rank=mgSelection?.ranking||[];
-  $('#mg1Compare').textContent=rank.length?`V18 ${mgSelection?.riskTier||''}. Ranking elegido SOLO en desarrollo+confirmación: ${rank.map((x,i)=>`${i+1}) ${x.policy.label}: ${x.stats.netUnits>=0?'+':''}${x.stats.netUnits.toFixed(0)}u, DD ${x.stats.maxDrawdown.toFixed(0)}u, racha ${x.stats.maxLossStreak}`).join(' · ')}. El 30% final NO participa en la selección.`:'Sin ranking de políticas para este modo.';
+  $('#mg1Compare').textContent=rank.length?`V19 ${mgSelection?.riskTier||''}. Ranking elegido SOLO en desarrollo+confirmación: ${rank.map((x,i)=>`${i+1}) ${x.policy.label}: ${x.stats.netUnits>=0?'+':''}${x.stats.netUnits.toFixed(0)}u, DD ${x.stats.maxDrawdown.toFixed(0)}u, racha ${x.stats.maxLossStreak}`).join(' · ')}. El 30% final NO participa en la selección.`:'Sin ranking de políticas para este modo.';
   const profileEl=$('#mg1Profiles');
   if(profileEl){
     const fmt=x=>`${x.netUnits>=0?'+':''}${x.netUnits.toFixed(0)}u · ciclos ${x.accuracy!==null?(x.accuracy*100).toFixed(1)+'%':'—'} · DD ${x.maxDrawdown.toFixed(0)}u · racha ${x.maxLossStreak} · MG1 ${x.mgUsed}`;
