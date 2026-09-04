@@ -95,7 +95,7 @@
         <div id="botFileInfo" class="bot-file-info hidden"></div>
         <div class="bot-controls">
           <label>Duración<select id="botDuration"><option value="1">1 minuto</option><option value="5">5 minutos</option></select></label>
-          <label>Modo<select id="botStrategy"><option value="walkforward">Validación temporal</option><option value="validated">Filtro selectivo</option><option value="balanced">Balanceado</option></select></label>
+          <label>Modo<select id="botStrategy"><option value="robust">Validación robusta</option><option value="walkforward">Validación temporal</option><option value="validated">Filtro selectivo</option><option value="balanced">Balanceado</option></select></label>
         </div>
         <button id="runBotBtn" class="primary hidden" type="button">▶ Ejecutar backtest DEMO</button>
         <p class="bot-note">El porcentaje mostrado es histórico sobre el archivo cargado; no garantiza resultados futuros. No ejecuta operaciones.</p>
@@ -108,8 +108,8 @@
           <div class="validation-title">VALIDACIÓN TEMPORAL</div>
           <div id="selectedRule" class="selected-rule">—</div>
           <div class="validation-grid">
-            <div><small>ENTRENAMIENTO</small><strong id="trainAccuracy">—</strong><span id="trainCount">0 señales</span></div>
-            <div><small>PRUEBA FUERA DE MUESTRA</small><strong id="testAccuracy">—</strong><span id="testCount">0 señales</span></div>
+            <div><small id="trainLabel">ENTRENAMIENTO</small><strong id="trainAccuracy">—</strong><span id="trainCount">0 señales</span></div>
+            <div><small id="testLabel">PRUEBA FUERA DE MUESTRA</small><strong id="testAccuracy">—</strong><span id="testCount">0 señales</span></div>
           </div>
           <p id="validationNote" class="validation-note"></p>
         </div>

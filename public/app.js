@@ -319,14 +319,20 @@ function parseCandleCsv(text) {
 function ema(vals, period){const k=2/(period+1);let e=vals[0];for(let i=1;i<vals.length;i++)e=vals[i]*k+e*(1-k);return e;}
 function rsi(vals,p=14){if(vals.length<p+1)return 50;let g=0,l=0;for(let i=vals.length-p;i<vals.length;i++){const d=vals[i]-vals[i-1];if(d>0)g+=d;else l-=d;}if(l===0)return 100;const rs=(g/p)/(l/p);return 100-(100/(1+rs));}
 function featureAt(candles,i){
-  if(i<25)return null;
-  const w=candles.slice(i-24,i+1), closes=w.map(x=>x.close), c=candles[i];
-  const e9=ema(closes.slice(-12),9), e21=ema(closes,21), rv=rsi(closes,14), mom=c.close-closes[closes.length-4];
-  const recent=candles.slice(Math.max(0,i-3),i+1);
+  if(i<35)return null;
+  const w=candles.slice(i-34,i+1), closes=w.map(x=>x.close), c=candles[i];
+  const e9=ema(closes.slice(-16),9), e21=ema(closes.slice(-28),21), rv=rsi(closes,14);
+  const mom3=c.close-closes[closes.length-4], mom5=c.close-closes[closes.length-6];
+  const recent=candles.slice(i-3,i+1);
   const recentUp=recent.filter(x=>x.close>x.open).length, recentDown=recent.filter(x=>x.close<x.open).length;
-  const down=(c.close<e9)+(e9<e21)+(rv<48)+(mom<0)+(c.close<c.open);
-  const up=(c.close>e9)+(e9>e21)+(rv>52)+(mom>0)+(c.close>c.open);
-  return {e9,e21,rsi:rv,mom,up,down,recentUp,recentDown,c};
+  const range=Math.max(1e-12,c.high-c.low), body=Math.abs(c.close-c.open), bodyFrac=body/range;
+  const upperWick=(c.high-Math.max(c.open,c.close))/range, lowerWick=(Math.min(c.open,c.close)-c.low)/range;
+  const ranges=candles.slice(i-9,i+1).map(x=>Math.max(1e-12,x.high-x.low));
+  const avgRange=ranges.reduce((a,b)=>a+b,0)/ranges.length;
+  const rangeRatio=range/Math.max(1e-12,avgRange);
+  const down=(c.close<e9)+(e9<e21)+(rv<48)+(mom3<0)+(c.close<c.open);
+  const up=(c.close>e9)+(e9>e21)+(rv>52)+(mom3>0)+(c.close>c.open);
+  return {e9,e21,rsi:rv,mom3,mom5,up,down,recentUp,recentDown,c,bodyFrac,upperWick,lowerWick,rangeRatio};
 }
 function basicSignal(candles,i,strategy){
   const f=featureAt(candles,i); if(!f)return null;
@@ -344,9 +350,9 @@ function resultFor(candles,i,duration,signal){
   if(Math.abs(diff)<1e-12)return 'DRAW';
   return (signal==='BUY'?diff>0:diff<0)?'WIN':'LOSS';
 }
-function runFixedBacktest(strategy,duration,start=25,end=botCandles.length-duration){
+function runFixedBacktest(strategy,duration,start=35,end=botCandles.length-duration){
   const out=[];
-  for(let i=Math.max(25,start);i<Math.min(end,botCandles.length-duration);i++){
+  for(let i=Math.max(35,start);i<Math.min(end,botCandles.length-duration);i++){
     const s=basicSignal(botCandles,i,strategy); if(!s)continue;
     const result=resultFor(botCandles,i,duration,s.signal);
     out.push({...s,entryIndex:i,entryTime:botCandles[i].t,exitTime:botCandles[i+duration].t,result});
@@ -356,9 +362,11 @@ function runFixedBacktest(strategy,duration,start=25,end=botCandles.length-durat
 }
 function candidateRules(){
   const rules=[];
-  for(const direction of ['SELL','BUY']) for(const votes of [4,5]) for(const trend of [false,true]) for(const majority of [false,true]) {
-    const gates=direction==='SELL'?[45,48,50]:[50,52,55];
-    for(const rsiGate of gates) rules.push({direction,votes,trend,majority,rsiGate});
+  for(const direction of ['SELL','BUY']){
+    const gates=direction==='SELL'?[50,48,45,42,40]:[50,52,55,58,60];
+    for(const votes of [3,4,5]) for(const trend of [false,true]) for(const majority of [0,3])
+      for(const rsiGate of gates) for(const momentum of ['none','3','5']) for(const bodyMin of [0,0.35,0.55])
+        for(const rangeMin of [0,0.9,1.1]) rules.push({direction,votes,trend,majority,rsiGate,momentum,bodyMin,rangeMin});
   }
   return rules;
 }
@@ -366,17 +374,22 @@ function matchesRule(f,r){
   if(r.direction==='SELL'){
     if(f.down<r.votes || f.rsi>r.rsiGate) return false;
     if(r.trend && !(f.e9<f.e21)) return false;
-    if(r.majority && f.recentDown<3) return false;
+    if(r.majority && f.recentDown<r.majority) return false;
+    if(r.momentum==='3' && !(f.mom3<0)) return false;
+    if(r.momentum==='5' && !(f.mom5<0)) return false;
   } else {
     if(f.up<r.votes || f.rsi<r.rsiGate) return false;
     if(r.trend && !(f.e9>f.e21)) return false;
-    if(r.majority && f.recentUp<3) return false;
+    if(r.majority && f.recentUp<r.majority) return false;
+    if(r.momentum==='3' && !(f.mom3>0)) return false;
+    if(r.momentum==='5' && !(f.mom5>0)) return false;
   }
+  if(f.bodyFrac<r.bodyMin || f.rangeRatio<r.rangeMin) return false;
   return true;
 }
 function evaluateRule(rule,duration,start,end){
   const rows=[];
-  for(let i=Math.max(25,start);i<Math.min(end,botCandles.length-duration);i++){
+  for(let i=Math.max(35,start);i<Math.min(end,botCandles.length-duration);i++){
     const f=featureAt(botCandles,i); if(!f || !matchesRule(f,rule))continue;
     const result=resultFor(botCandles,i,duration,rule.direction);
     rows.push({signal:rule.direction,score:rule.direction==='SELL'?f.down+2:f.up+2,confidence:null,rsi:f.rsi,entryIndex:i,entryTime:botCandles[i].t,exitTime:botCandles[i+duration].t,result});
@@ -394,46 +407,88 @@ function wilsonLower(w,n,z=1.64){
 }
 function ruleText(r){
   const dir=r.direction==='SELL'?'VENTA':'COMPRA';
-  const trend=r.trend?' + tendencia EMA alineada':'';
-  const maj=r.majority?' + ≥3/4 velas en dirección':'';
-  const rg=r.direction==='SELL'?`RSI ≤ ${r.rsiGate}`:`RSI ≥ ${r.rsiGate}`;
-  return `${dir} · fuerza ≥ ${r.votes}/5 · ${rg}${trend}${maj}`;
+  const parts=[`${dir} · fuerza ≥ ${r.votes}/5`,r.direction==='SELL'?`RSI ≤ ${r.rsiGate}`:`RSI ≥ ${r.rsiGate}`];
+  if(r.trend) parts.push('EMA 9/21 alineada');
+  if(r.majority) parts.push(`≥${r.majority}/4 velas en dirección`);
+  if(r.momentum!=='none') parts.push(`momentum ${r.momentum} velas`);
+  if(r.bodyMin) parts.push(`cuerpo ≥ ${Math.round(r.bodyMin*100)}%`);
+  if(r.rangeMin) parts.push(`rango ≥ ${r.rangeMin.toFixed(1)}× media`);
+  return parts.join(' · ');
+}
+function scoreCandidate(stA,stB){
+  if(!stA.resolved||!stB.resolved)return -1;
+  const minAcc=Math.min(stA.accuracy,stB.accuracy);
+  const pooledW=stA.wins+stB.wins, pooledN=stA.resolved+stB.resolved;
+  return minAcc*0.65 + wilsonLower(pooledW,pooledN)*0.35;
+}
+function runRobustValidation(duration){
+  // 55% búsqueda, 15% confirmación interna, 30% prueba final intocable.
+  const cutA=Math.floor(botCandles.length*0.55), cutB=Math.floor(botCandles.length*0.70);
+  const candidates=[];
+  for(const rule of candidateRules()){
+    const a=stats(evaluateRule(rule,duration,35,cutA));
+    if(a.resolved<45) continue;
+    const b=stats(evaluateRule(rule,duration,cutA,cutB));
+    if(b.resolved<12) continue;
+    candidates.push({rule,a,b,quality:scoreCandidate(a,b)});
+  }
+  candidates.sort((x,y)=>y.quality-x.quality || (y.a.resolved+y.b.resolved)-(x.a.resolved+x.b.resolved));
+  const validated=candidates.find(x=>x.a.accuracy>=0.55 && x.b.accuracy>=0.53 && wilsonLower(x.a.wins+x.b.wins,x.a.resolved+x.b.resolved)>0.50);
+  const best=validated || candidates.find(x=>(x.a.resolved+x.b.resolved)>=100) || candidates[0];
+  if(!best) return {rows:[],a:null,b:null,test:null,rule:null,mode:'none'};
+  const testRows=evaluateRule(best.rule,duration,cutB,botCandles.length-duration), test=stats(testRows);
+  return {rows:testRows,a:best.a,b:best.b,test,rule:best.rule,mode:validated?'validated':'exploratory'};
 }
 function runWalkForward(duration){
   const split=Math.floor(botCandles.length*0.70);
-  const trainStart=25, trainEnd=split, testStart=split, testEnd=botCandles.length-duration;
   const all=[];
   for(const rule of candidateRules()){
-    const rows=evaluateRule(rule,duration,trainStart,trainEnd), st=stats(rows);
+    const rows=evaluateRule(rule,duration,35,split), st=stats(rows);
     if(st.resolved<30) continue;
-    all.push({rule,rows,st,quality:wilsonLower(st.wins,st.resolved)});
+    all.push({rule,st,quality:wilsonLower(st.wins,st.resolved)});
   }
   all.sort((a,b)=>b.quality-a.quality || b.st.resolved-a.st.resolved);
-
-  // Primero buscamos una regla con evidencia razonable en entrenamiento.
   const robust=all.find(x=>x.st.resolved>=30 && x.st.accuracy>=0.55 && x.quality>0.50);
-  // Si no existe, mostramos igualmente el mejor candidato exploratorio con muestra amplia.
-  // Esto evita devolver 0 señales, pero NO lo presenta como estrategia validada.
   const exploratory=all.find(x=>x.st.resolved>=80) || all[0];
   const best=robust || exploratory;
-  if(!best) return {rows:[],train:null,test:null,rule:null,split,mode:'none'};
-
-  const testRows=evaluateRule(best.rule,duration,testStart,testEnd), test=stats(testRows);
-  return {rows:testRows,train:best.st,test,rule:best.rule,split,mode:robust?'validated':'exploratory'};
+  if(!best) return {rows:[],train:null,test:null,rule:null,mode:'none'};
+  const testRows=evaluateRule(best.rule,duration,split,botCandles.length-duration), test=stats(testRows);
+  return {rows:testRows,train:best.st,test,rule:best.rule,mode:robust?'validated':'exploratory'};
 }
 function runBacktest(){
   const duration=+$('#botDuration').value, strategy=$('#botStrategy').value;
-  if(strategy==='walkforward'){
-    const wf=runWalkForward(duration);
-    renderWalkForward(wf,duration);
-  } else {
-    $('#walkForwardPanel').classList.add('hidden');
-    renderBotResults(runFixedBacktest(strategy,duration),duration, strategy==='validated'?'Filtro selectivo':'Balanceado');
-  }
+  if(strategy==='robust') return renderRobust(runRobustValidation(duration),duration);
+  if(strategy==='walkforward') return renderWalkForward(runWalkForward(duration),duration);
+  $('#walkForwardPanel').classList.add('hidden');
+  renderBotResults(runFixedBacktest(strategy,duration),duration, strategy==='validated'?'Filtro selectivo':'Balanceado');
 }
 runBotBtn?.addEventListener('click',runBacktest);
+function renderRobust(v,duration){
+  const panel=$('#walkForwardPanel'); panel.classList.remove('hidden');
+  $('#trainLabel').textContent='DESARROLLO 55% + CONFIRMACIÓN 15%'; $('#testLabel').textContent='PRUEBA FINAL 30%';
+  if(!v.rule){
+    $('#selectedRule').textContent='No hubo datos suficientes para evaluar combinaciones robustas.';
+    $('#trainAccuracy').textContent='—'; $('#testAccuracy').textContent='—'; $('#trainCount').textContent='0 señales'; $('#testCount').textContent='0 señales';
+    $('#validationNote').textContent='Hace falta más historial o reglas distintas. No se fuerza una estrategia.';
+    renderBotResults([],duration,'Validación robusta'); return;
+  }
+  const devW=v.a.wins+v.b.wins, devN=v.a.resolved+v.b.resolved, devAcc=devN?devW/devN:null;
+  $('#selectedRule').textContent=`${v.mode==='validated'?'CANDIDATO VALIDADO INTERNAMENTE':'MEJOR CANDIDATO EXPLORATORIO'}: ${ruleText(v.rule)}`;
+  $('#trainAccuracy').textContent=devAcc===null?'—':`${(devAcc*100).toFixed(1)}%`;
+  $('#testAccuracy').textContent=v.test.accuracy===null?'—':`${(v.test.accuracy*100).toFixed(1)}%`;
+  $('#trainCount').textContent=`${devN} señales · bloques ${(v.a.accuracy*100).toFixed(1)}% / ${(v.b.accuracy*100).toFixed(1)}%`;
+  $('#testCount').textContent=`${v.test.resolved} señales resueltas`;
+  let verdict=v.mode==='exploratory'?'No pasó los mínimos internos en ambos bloques. Se muestra solo para diagnóstico.':
+    v.test.resolved<20?'La prueba final tiene pocas señales; hace falta más historial.':
+    v.test.accuracy>=0.58?'Conserva una ventaja interesante en el 30% final no usado para elegirla; conviene validarla con días nuevos.':
+    v.test.accuracy>=0.54?'Conserva una ventaja modesta en la prueba final; todavía necesita más días nuevos.':
+    'No mantiene una ventaja suficiente en la prueba final; no debe usarse como estrategia.';
+  $('#validationNote').textContent=`La regla se buscó en el 55% inicial y tuvo que sobrevivir un 15% de confirmación antes de mirar el 30% final. ${verdict}`;
+  renderBotResults(v.rows,duration,v.mode==='validated'?'Prueba final fuera de muestra':'Diagnóstico final fuera de muestra');
+}
 function renderWalkForward(wf,duration){
   const panel=$('#walkForwardPanel'); panel.classList.remove('hidden');
+  $('#trainLabel').textContent='ENTRENAMIENTO'; $('#testLabel').textContent='PRUEBA FUERA DE MUESTRA';
   if(!wf.rule){
     $('#selectedRule').textContent='No hubo datos suficientes para evaluar reglas.';
     $('#trainAccuracy').textContent='—'; $('#testAccuracy').textContent='—'; $('#trainCount').textContent='0 señales'; $('#testCount').textContent='0 señales';
@@ -446,19 +501,11 @@ function renderWalkForward(wf,duration){
   $('#testAccuracy').textContent=wf.test.accuracy===null?'—':`${(wf.test.accuracy*100).toFixed(1)}%`;
   $('#trainCount').textContent=`${wf.train.resolved} señales resueltas`;
   $('#testCount').textContent=`${wf.test.resolved} señales resueltas`;
-
-  let verdict='';
-  if(wf.mode==='exploratory'){
-    verdict='Ninguna regla superó el umbral de validación en el 70% de entrenamiento. Se muestra el mejor candidato solo para diagnóstico; no debe tratarse como una estrategia validada.';
-  } else if(wf.test.resolved<20){
-    verdict='La muestra de prueba es pequeña; todavía no permite sacar conclusiones.';
-  } else if(wf.test.accuracy>=0.58){
-    verdict='El filtro conserva una ventaja en el tramo no usado para elegirlo. Conviene seguir validándolo con días nuevos.';
-  } else if(wf.test.accuracy>=0.53){
-    verdict='La ventaja fuera de muestra es modesta y necesita más datos antes de confiar en ella.';
-  } else {
-    verdict='El filtro no conserva una ventaja clara fuera de muestra; conviene descartarlo o rediseñar las variables.';
-  }
+  let verdict=wf.mode==='exploratory'?'Ninguna regla superó el umbral de validación en el 70% de entrenamiento. Se muestra el mejor candidato solo para diagnóstico; no debe tratarse como una estrategia validada.':
+    wf.test.resolved<20?'La muestra de prueba es pequeña; todavía no permite sacar conclusiones.':
+    wf.test.accuracy>=0.58?'El filtro conserva una ventaja en el tramo no usado para elegirlo. Conviene seguir validándolo con días nuevos.':
+    wf.test.accuracy>=0.53?'La ventaja fuera de muestra es modesta y necesita más datos antes de confiar en ella.':
+    'El filtro no conserva una ventaja clara fuera de muestra; conviene descartarlo o rediseñar las variables.';
   $('#validationNote').textContent=`El filtro se eligió usando solo el 70% inicial. El 30% final quedó reservado y no participó en la selección. ${verdict}`;
   renderBotResults(wf.rows,duration,wf.mode==='validated'?'Prueba fuera de muestra':'Diagnóstico fuera de muestra');
 }
