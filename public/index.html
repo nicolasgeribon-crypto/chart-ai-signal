@@ -87,7 +87,7 @@
       <section class="hero bot-hero">
         <span class="eyebrow">🤖 laboratorio de señales</span>
         <h2>Bot DEMO V9</h2>
-        <p>Prueba la lógica con un CSV de velas históricas. El backtest usa solo velas anteriores. V9 prueba entradas tras retrocesos y confirmación a favor de la tendencia.</p>
+        <p>Prueba la lógica con un CSV de velas históricas. El backtest usa solo velas anteriores. V10 espera el retroceso y exige una vela de rechazo/confirmación antes de generar la entrada.</p>
       </section>
       <section class="card bot-card">
         <input id="botCsvInput" type="file" accept=".csv,text/csv" hidden />
@@ -95,7 +95,7 @@
         <div id="botFileInfo" class="bot-file-info hidden"></div>
         <div class="bot-controls">
           <label>Duración<select id="botDuration"><option value="1">1 minuto</option><option value="5">5 minutos</option></select></label>
-          <label>Modo<select id="botStrategy"><option value="pullback">Retroceso robusto (V9)</option><option value="robust">Validación robusta mixta</option><option value="validated">Filtro selectivo</option><option value="balanced">Balanceado</option></select></label>
+          <label>Modo<select id="botStrategy"><option value="pullback">Retroceso confirmado (V10)</option><option value="robust">Validación robusta mixta</option><option value="validated">Filtro selectivo</option><option value="balanced">Balanceado</option></select></label>
         </div>
         <button id="runBotBtn" class="primary hidden" type="button">▶ Ejecutar backtest DEMO</button>
         <p class="bot-note">El porcentaje mostrado es histórico sobre el archivo cargado; no garantiza resultados futuros. No ejecuta operaciones.</p>

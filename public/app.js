@@ -280,7 +280,7 @@ $('#clearHistoryBtn').addEventListener('click', () => {
 renderHistory();
 refreshStatus();
 
-// --- Bot DEMO V9: validación robusta + entradas con retroceso ---
+// --- Bot DEMO V10: retroceso + confirmación de rechazo antes de entrar ---
 const botCsvInput = $('#botCsvInput');
 const botPickBtn = $('#botPickBtn');
 const runBotBtn = $('#runBotBtn');
@@ -339,7 +339,7 @@ function featureAt(candles,i){
   const rangeRatio=range/Math.max(1e-12,avgRange);
   const down=(c.close<e9)+(e9<e21)+(rv<48)+(mom3<0)+(c.close<c.open);
   const up=(c.close>e9)+(e9>e21)+(rv>52)+(mom3>0)+(c.close>c.open);
-  return {e9,e21,rsi:rv,mom3,mom5,impulseBeforePullback,up,down,recentUp,recentDown,pullbackUp,pullbackDown,prevHigh,prevLow,c,bodyFrac,upperWick,lowerWick,rangeRatio,avgRange,prevClose:candles[i-1].close};
+  return {e9,e21,rsi:rv,mom3,mom5,impulseBeforePullback,up,down,recentUp,recentDown,pullbackUp,pullbackDown,prevHigh,prevLow,c,bodyFrac,upperWick,lowerWick,rangeRatio,avgRange,prevClose:candles[i-1].close,prevCandleHigh:candles[i-1].high,prevCandleLow:candles[i-1].low};
 }
 
 async function buildFeatureCacheAsync(){
@@ -364,12 +364,19 @@ function pullbackMatch(f,r){
   if(r.direction==='SELL'){
     if(!(f.e9<f.e21) || !(f.impulseBeforePullback<0)) return false;
     if(f.pullbackUp < (r.pullback==='deep'?2:1)) return false;
-    if(!(f.c.close<f.c.open) || !(f.c.close<f.prevClose)) return false;
+    // V10: no entrar apenas termina el retroceso. La vela actual debe confirmar
+    // rechazo bajista cerrando por debajo del mínimo de la vela anterior.
+    if(!(f.c.close<f.c.open) || !(f.c.close<f.prevCandleLow)) return false;
+    // Evita confirmaciones con mecha superior excesiva o cuerpo demasiado débil.
+    if(f.bodyFrac<0.35 || f.upperWick>0.45) return false;
     if(r.pullback==='ema' && !(f.prevHigh>=f.e9 && f.c.close<f.e9)) return false;
   } else {
     if(!(f.e9>f.e21) || !(f.impulseBeforePullback>0)) return false;
     if(f.pullbackDown < (r.pullback==='deep'?2:1)) return false;
-    if(!(f.c.close>f.c.open) || !(f.c.close>f.prevClose)) return false;
+    // Confirmación alcista: cierre por encima del máximo de la vela anterior.
+    if(!(f.c.close>f.c.open) || !(f.c.close>f.prevCandleHigh)) return false;
+    // Evita confirmaciones con mecha inferior excesiva o cuerpo demasiado débil.
+    if(f.bodyFrac<0.35 || f.lowerWick>0.45) return false;
     if(r.pullback==='ema' && !(f.prevLow<=f.e9 && f.c.close>f.e9)) return false;
   }
   return true;
@@ -420,7 +427,7 @@ function wilsonLower(w,n,z=1.64){if(!n)return 0;const p=w/n,zz=z*z;return (p+zz/
 function ruleText(r){
   const dir=r.direction==='SELL'?'VENTA':'COMPRA';
   const pb=r.pullback==='none'?'continuación directa':r.pullback==='ema'?'retroceso a EMA9':r.pullback==='deep'?'retroceso 2+ velas':'retroceso 1–3 velas';
-  return `${dir} · ${pb} · fuerza ≥ ${r.votes}/5 · ${r.direction==='SELL'?`RSI ≤ ${r.rsiGate}`:`RSI ≥ ${r.rsiGate}`} · momentum ${r.momentum} · cuerpo ≥ ${Math.round(r.bodyMin*100)}% · rango ≥ ${r.rangeMin.toFixed(1)}×`;
+  return `${dir} · ${pb} + confirmación · fuerza ≥ ${r.votes}/5 · ${r.direction==='SELL'?`RSI ≤ ${r.rsiGate}`:`RSI ≥ ${r.rsiGate}`} · momentum ${r.momentum} · cuerpo ≥ ${Math.round(r.bodyMin*100)}% · rango ≥ ${r.rangeMin.toFixed(1)}×`;
 }
 function scoreCandidate(a,b){
   if(!a.resolved||!b.resolved)return -1;
