@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Prueba Stockity · Chart AI</title>
+  <style>
+    body{font-family:system-ui,-apple-system,sans-serif;max-width:720px;margin:0 auto;padding:24px;background:#0f1115;color:#f4f4f5}
+    .card{background:#181b21;border:1px solid #30343b;border-radius:18px;padding:20px;margin:16px 0}
+    button{width:100%;padding:15px;border:0;border-radius:12px;font-size:17px;font-weight:700;background:#7c3aed;color:white}
+    button:disabled{opacity:.55}.ok{color:#4ade80}.bad{color:#fb7185}.muted{color:#a1a1aa}pre{white-space:pre-wrap;word-break:break-word;background:#0b0d10;padding:14px;border-radius:12px}
+  </style>
+</head>
+<body>
+  <h1>Prueba Stockity</h1>
+  <p class="muted">Diagnóstico de solo lectura. No crea operaciones ni modifica la cuenta.</p>
+  <div class="card"><div id="cfg">Comprobando configuración…</div></div>
+  <button id="run">Probar conexión</button>
+  <div class="card" id="out" hidden><strong>Resultado</strong><pre id="json"></pre></div>
+<script>
+const cfg=document.querySelector('#cfg'),run=document.querySelector('#run'),out=document.querySelector('#out'),json=document.querySelector('#json');
+fetch('/api/stockity/status').then(r=>r.json()).then(x=>{cfg.innerHTML=x.configured?'<span class="ok">✓ Credenciales configuradas en Render</span>':'<span class="bad">✗ Faltan variables STOCKITY_EMAIL / STOCKITY_PASSWORD</span>';run.disabled=!x.configured}).catch(()=>{cfg.textContent='No se pudo comprobar la configuración.'});
+run.onclick=async()=>{run.disabled=true;run.textContent='Probando…';out.hidden=false;json.textContent='Conectando con Stockity…';try{const r=await fetch('/api/stockity/diagnose',{method:'POST'});const x=await r.json();json.textContent=JSON.stringify(x,null,2)}catch(e){json.textContent='Error: '+e.message}finally{run.disabled=false;run.textContent='Probar nuevamente'}};
+</script>
+</body></html>
