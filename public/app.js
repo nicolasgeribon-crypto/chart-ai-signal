@@ -193,7 +193,7 @@ function showResult(d) {
   const map = {
     BUY: ['COMPRA', 'COMPRA', 'buy', '↑', 'Entrada alcista detectada'],
     SELL: ['VENTA', 'VENTA', 'sell', '↓', 'Entrada bajista detectada'],
-    WAIT: ['NO OPERAR', 'ESPERAR', 'wait', '•', 'Sin entrada clara']
+    WAIT: ['SIN SEÑAL', 'SIN SEÑAL', 'wait', '•', '']
   };
   const [title, pill, cls, icon, subtitle] = map[d.signal] || map.WAIT;
   $('#signal').innerHTML = `<span id="signalIcon" class="signal-icon ${cls}">${icon}</span> ${title}`;
@@ -204,8 +204,13 @@ function showResult(d) {
   const exitTime = d.exit_time || addMinutesToHHMM(d.entry_time, Number(d.expiry_minutes) || 5);
   $('#entry').textContent = d.entry_time || '--:--';
   $('#exit').textContent = exitTime;
-  $('#confidenceText').textContent = `${d.confidence || 0}%`;
-  $('#confidenceBar').style.width = `${d.confidence || 0}%`;
+  const confidenceBlock = $('#confidenceBlock');
+  const isWait = d.signal === 'WAIT';
+  if (confidenceBlock) confidenceBlock.classList.toggle('hidden', isWait);
+  if (!isWait) {
+    $('#confidenceText').textContent = `${d.confidence || 0}%`;
+    $('#confidenceBar').style.width = `${d.confidence || 0}%`;
+  }
   $('#trend').textContent = d.trend || 'incierta';
   $('#timeframe').textContent = d.timeframe || 'No visible';
   $('#support').textContent = d.support || 'No visible';

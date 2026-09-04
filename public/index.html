@@ -63,7 +63,7 @@
         <div><small>HORA DE FINALIZACIÓN</small><strong id="exit">--:--</strong></div>
       </div>
       <div class="duration-line"><span>DURACIÓN DE LA ENTRADA</span><strong>5 min</strong></div>
-      <div class="confidence">
+      <div class="confidence" id="confidenceBlock">
         <div><span>CONFIANZA DEL ANÁLISIS</span><strong id="confidenceText">0%</strong></div>
         <div class="meter"><span id="confidenceBar"></span></div>
       </div>
@@ -86,7 +86,7 @@
     <section id="botSection" class="hidden">
       <section class="hero bot-hero">
         <span class="eyebrow">🤖 laboratorio de señales</span>
-        <h2>Bot DEMO V20</h2>
+        <h2>Bot DEMO V21</h2>
         <p>Prueba la lógica con un CSV de velas históricas. El backtest usa solo velas anteriores. V19 añade candidatos para filtrar la entrada inicial antes de MG1. La selección se hace solo con desarrollo+confirmación; payout real y el 30% final permanecen como prueba fuera de muestra.</p>
       </section>
       <section class="card bot-card">
@@ -95,7 +95,7 @@
         <div id="botFileInfo" class="bot-file-info hidden"></div>
         <div class="bot-controls">
           <label>Duración<select id="botDuration"><option value="1">1 minuto</option><option value="5">5 minutos</option></select></label>
-          <label>Modo<select id="botStrategy"><option value="pullback">Retroceso robusto (V20)</option><option value="robust">Validación robusta mixta</option><option value="validated">Filtro selectivo</option><option value="balanced">Balanceado</option></select></label>
+          <label>Modo<select id="botStrategy"><option value="pullback">Retroceso robusto (V21)</option><option value="robust">Validación robusta mixta</option><option value="validated">Filtro selectivo</option><option value="balanced">Balanceado</option></select></label>
         </div>
         <div style="margin:14px 0"><label for="payoutPct">Payout real (%)</label><input id="payoutPct" type="number" min="1" max="100" value="82" inputmode="decimal" style="width:100%;box-sizing:border-box;margin-top:7px;padding:14px;border-radius:12px;border:1px solid #24434a;background:#071820;color:#e9f4f1;font-size:18px"><small style="display:block;margin-top:7px;opacity:.72">Pon el porcentaje que muestra la plataforma. Ej.: 82.</small></div><button id="runBotBtn" class="primary hidden" type="button">▶ Ejecutar backtest DEMO</button>
         <p class="bot-note">El porcentaje mostrado es histórico sobre el archivo cargado; no garantiza resultados futuros. No ejecuta operaciones.</p>
