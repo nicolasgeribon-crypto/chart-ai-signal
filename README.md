@@ -1,16 +1,13 @@
-# Chart AI Signal v7
+# Chart AI Signal V8
 
-V7 mantiene el analizador visual, el historial DEMO y el Bot DEMO, y añade **validación temporal fuera de muestra**.
+Misma app con análisis visual por IA, historial DEMO y Bot DEMO.
 
-## Bot DEMO V7
-- Importa CSV con `candle_time_utc, open, high, low, close`.
-- Deduplica actualizaciones de la misma vela conservando la última fila.
-- Duración seleccionable: 1 o 5 minutos.
-- `Validación temporal`: divide cronológicamente el historial 70/30.
-- El 70% inicial se usa para escoger, entre reglas predefinidas, un filtro con al menos 30 operaciones resueltas.
-- El 30% final queda fuera del proceso de selección y se usa como prueba independiente.
-- Muestra por separado acierto y cantidad de señales de entrenamiento y prueba.
-- No usa la vela de resultado para decidir la entrada.
-- No ejecuta operaciones ni se conecta a Binomo.
+## V8
+- Nuevo modo **Validación robusta** por defecto.
+- Divide el historial 55% desarrollo, 15% confirmación y 30% prueba final fuera de muestra.
+- Explora combinaciones causales de EMA 9/21, RSI, momentum 3/5, mayoría de velas, fuerza del cuerpo y expansión de rango.
+- Una regla debe sostenerse en desarrollo y confirmación antes de considerarse validada.
+- El 30% final nunca participa en la selección.
+- Si ninguna regla supera los mínimos, se muestra solo el mejor candidato exploratorio y se etiqueta como no validado.
 
-Los resultados históricos no garantizan resultados futuros. Una muestra corta puede producir porcentajes inestables.
+Uso educativo / DEMO. No garantiza resultados futuros ni ejecuta operaciones.
