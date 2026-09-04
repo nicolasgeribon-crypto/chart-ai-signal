@@ -55,13 +55,14 @@
     <section id="resultCard" class="card result-card hidden">
       <div class="result-head"><span>●●● resultado · chart-ai</span><span id="assetBadge">—</span></div>
       <div class="signal-row">
-        <div><small>SEÑAL</small><strong id="signal">—</strong></div>
+        <div><small>SEÑAL</small><strong id="signal"><span id="signalIcon">•</span> —</strong><div id="signalSub" class="signal-sub">Esperando análisis</div></div>
         <div class="pill" id="signalPill">—</div>
       </div>
-      <div class="metrics">
-        <div><small>MINUTO DE ENTRADA</small><strong id="entry">--:--</strong></div>
-        <div><small>DURACIÓN</small><strong>5 min</strong></div>
+      <div class="metrics entry-times">
+        <div><small>HORA DE INICIO</small><strong id="entry">--:--</strong></div>
+        <div><small>HORA DE FINALIZACIÓN</small><strong id="exit">--:--</strong></div>
       </div>
+      <div class="duration-line"><span>DURACIÓN DE LA ENTRADA</span><strong>5 min</strong></div>
       <div class="confidence">
         <div><span>CONFIANZA DEL ANÁLISIS</span><strong id="confidenceText">0%</strong></div>
         <div class="meter"><span id="confidenceBar"></span></div>
@@ -72,12 +73,30 @@
         <div><small>SOPORTE</small><span id="support">—</span></div>
         <div><small>RESISTENCIA</small><span id="resistance">—</span></div>
       </div>
+      <div class="setup-box"><small>CONFIGURACIÓN DETECTADA</small><p id="setupText">—</p></div>
       <div class="comment"><small>COMENTARIO</small><p id="reason"></p></div>
+      <div class="invalidation"><small>SE INVALIDA SI</small><p id="invalidationText">—</p></div>
       <div class="risk"><b>⚠ Gestión de riesgo</b><p id="riskNote">Una captura no permite predecir con certeza el próximo movimiento.</p></div>
       <button id="anotherBtn" class="primary" type="button">Analizar otra</button>
     </section>
 
     <section id="errorCard" class="card error-card hidden"><b>No se pudo analizar</b><p id="errorText"></p></section>
+
+    <section id="historyCard" class="card history-card">
+      <div class="history-head">
+        <div><small>HISTORIAL DEMO</small><strong>Resultados y efectividad</strong></div>
+        <button id="clearHistoryBtn" class="history-clear" type="button">Borrar</button>
+      </div>
+      <div class="stats-grid">
+        <div><small>OPERACIONES</small><strong id="statTotal">0</strong></div>
+        <div><small>WIN</small><strong id="statWins">0</strong></div>
+        <div><small>LOSS</small><strong id="statLosses">0</strong></div>
+        <div><small>ACERTIVIDAD</small><strong id="statAccuracy">—</strong></div>
+      </div>
+      <p class="stats-note">Las operaciones pendientes no cuentan en el porcentaje de acierto.</p>
+      <div id="historyList" class="history-list"></div>
+      <p id="historyEmpty" class="history-empty">Todavía no hay entradas de COMPRA o VENTA guardadas en este dispositivo.</p>
+    </section>
 
     <p class="disclaimer">Herramienta educativa de análisis visual. No garantiza resultados ni sustituye una decisión financiera informada.</p>
   </main>
