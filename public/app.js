@@ -402,17 +402,24 @@ function ruleText(r){
 function runWalkForward(duration){
   const split=Math.floor(botCandles.length*0.70);
   const trainStart=25, trainEnd=split, testStart=split, testEnd=botCandles.length-duration;
-  const candidates=[];
+  const all=[];
   for(const rule of candidateRules()){
     const rows=evaluateRule(rule,duration,trainStart,trainEnd), st=stats(rows);
-    if(st.resolved<30 || st.accuracy < 0.55 || wilsonLower(st.wins,st.resolved) <= 0.50)continue;
-    candidates.push({rule,rows,st,quality:wilsonLower(st.wins,st.resolved)});
+    if(st.resolved<30) continue;
+    all.push({rule,rows,st,quality:wilsonLower(st.wins,st.resolved)});
   }
-  candidates.sort((a,b)=>b.quality-a.quality || b.st.resolved-a.st.resolved);
-  const best=candidates[0];
-  if(!best) return {rows:[],train:null,test:null,rule:null,split};
+  all.sort((a,b)=>b.quality-a.quality || b.st.resolved-a.st.resolved);
+
+  // Primero buscamos una regla con evidencia razonable en entrenamiento.
+  const robust=all.find(x=>x.st.resolved>=30 && x.st.accuracy>=0.55 && x.quality>0.50);
+  // Si no existe, mostramos igualmente el mejor candidato exploratorio con muestra amplia.
+  // Esto evita devolver 0 señales, pero NO lo presenta como estrategia validada.
+  const exploratory=all.find(x=>x.st.resolved>=80) || all[0];
+  const best=robust || exploratory;
+  if(!best) return {rows:[],train:null,test:null,rule:null,split,mode:'none'};
+
   const testRows=evaluateRule(best.rule,duration,testStart,testEnd), test=stats(testRows);
-  return {rows:testRows,train:best.st,test,rule:best.rule,split};
+  return {rows:testRows,train:best.st,test,rule:best.rule,split,mode:robust?'validated':'exploratory'};
 }
 function runBacktest(){
   const duration=+$('#botDuration').value, strategy=$('#botStrategy').value;
@@ -428,19 +435,32 @@ runBotBtn?.addEventListener('click',runBacktest);
 function renderWalkForward(wf,duration){
   const panel=$('#walkForwardPanel'); panel.classList.remove('hidden');
   if(!wf.rule){
-    $('#selectedRule').textContent='No se encontró un filtro con muestra mínima suficiente en el tramo de entrenamiento.';
+    $('#selectedRule').textContent='No hubo datos suficientes para evaluar reglas.';
     $('#trainAccuracy').textContent='—'; $('#testAccuracy').textContent='—'; $('#trainCount').textContent='0 señales'; $('#testCount').textContent='0 señales';
-    $('#validationNote').textContent='El bot no fuerza una estrategia cuando los datos de entrenamiento no alcanzan el mínimo exigido.';
+    $('#validationNote').textContent='Carga un historial más largo para poder hacer una validación temporal útil.';
     renderBotResults([],duration,'Validación temporal'); return;
   }
-  $('#selectedRule').textContent=ruleText(wf.rule);
+  const prefix=wf.mode==='validated'?'FILTRO VALIDADO EN ENTRENAMIENTO':'MEJOR CANDIDATO EXPLORATORIO';
+  $('#selectedRule').textContent=`${prefix}: ${ruleText(wf.rule)}`;
   $('#trainAccuracy').textContent=wf.train.accuracy===null?'—':`${(wf.train.accuracy*100).toFixed(1)}%`;
   $('#testAccuracy').textContent=wf.test.accuracy===null?'—':`${(wf.test.accuracy*100).toFixed(1)}%`;
   $('#trainCount').textContent=`${wf.train.resolved} señales resueltas`;
   $('#testCount').textContent=`${wf.test.resolved} señales resueltas`;
-  const verdict=wf.test.resolved<20?'Muestra de prueba pequeña; no sacar conclusiones todavía.':wf.test.accuracy>=0.58?'El filtro conserva una ventaja en el tramo no usado para elegirlo. Seguir validando con datos nuevos.':wf.test.accuracy>=0.53?'Hay una ventaja modesta fuera de muestra; necesita más datos.':'El filtro no conserva una ventaja clara fuera de muestra.';
-  $('#validationNote').textContent=`Se eligió el filtro usando solo el 70% inicial del historial. El 30% final se reservó como prueba y no participó en la selección. ${verdict}`;
-  renderBotResults(wf.rows,duration,'Prueba fuera de muestra');
+
+  let verdict='';
+  if(wf.mode==='exploratory'){
+    verdict='Ninguna regla superó el umbral de validación en el 70% de entrenamiento. Se muestra el mejor candidato solo para diagnóstico; no debe tratarse como una estrategia validada.';
+  } else if(wf.test.resolved<20){
+    verdict='La muestra de prueba es pequeña; todavía no permite sacar conclusiones.';
+  } else if(wf.test.accuracy>=0.58){
+    verdict='El filtro conserva una ventaja en el tramo no usado para elegirlo. Conviene seguir validándolo con días nuevos.';
+  } else if(wf.test.accuracy>=0.53){
+    verdict='La ventaja fuera de muestra es modesta y necesita más datos antes de confiar en ella.';
+  } else {
+    verdict='El filtro no conserva una ventaja clara fuera de muestra; conviene descartarlo o rediseñar las variables.';
+  }
+  $('#validationNote').textContent=`El filtro se eligió usando solo el 70% inicial. El 30% final quedó reservado y no participó en la selección. ${verdict}`;
+  renderBotResults(wf.rows,duration,wf.mode==='validated'?'Prueba fuera de muestra':'Diagnóstico fuera de muestra');
 }
 function renderBotResults(rows,duration,label='Backtest'){
   const s=stats(rows);
