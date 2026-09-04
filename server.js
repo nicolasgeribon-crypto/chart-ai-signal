@@ -137,7 +137,7 @@ Devuelve únicamente JSON válido:
   "reason": "explicación concreta basada en las velas visibles; si WAIT, indica qué confirmación convertiría la lectura en BUY o SELL",
   "invalidation": "qué movimiento visible invalidaría la lectura o No aplica",
   "risk_note": "Análisis visual educativo en 5m; una captura no permite predecir con certeza el próximo movimiento."
-}``;
+}`;
 
     const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
