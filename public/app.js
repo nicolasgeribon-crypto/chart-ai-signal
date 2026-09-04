@@ -280,7 +280,7 @@ $('#clearHistoryBtn').addEventListener('click', () => {
 renderHistory();
 refreshStatus();
 
-// --- Bot DEMO V12: V9 + MG1 selectiva entrenada solo en desarrollo/confirmación ---
+// --- Bot DEMO V13: MG1 selectiva optimizada por neto, drawdown y racha de pérdidas ---
 const botCsvInput = $('#botCsvInput');
 const botPickBtn = $('#botPickBtn');
 const runBotBtn = $('#runBotBtn');
@@ -499,8 +499,8 @@ function renderRobust(v,duration,family){
   $('#testCount').textContent=`${v.test.resolved} señales resueltas`;
   const verdict=v.mode==='exploratory'?'No pasó los mínimos internos; se muestra solo para diagnóstico.':v.test.resolved<15?'La prueba final tiene pocas señales; hace falta más historial.':v.test.accuracy>=0.58?'Mantiene una ventaja interesante en el 30% final. Debe validarse con días nuevos.':v.test.accuracy>=0.54?'Mantiene una ventaja modesta; necesita más datos nuevos.':'No mantiene una ventaja suficiente en la prueba final; no debe usarse como estrategia.';
   $('#validationNote').textContent=`Familia ${family}. La regla se buscó en el 55% inicial, tuvo que sobrevivir 15% de confirmación y solo después se evaluó en el 30% final. ${verdict}`;
-  const mgPolicy=selectMg1Policy(v.devRows||[],duration);
-  renderBotResults(v.rows,duration,v.mode==='validated'?'Prueba final fuera de muestra':'Diagnóstico final fuera de muestra',mgPolicy);
+  const mgSelection=selectMg1Policy(v.devRows||[],duration);
+  renderBotResults(v.rows,duration,v.mode==='validated'?'Prueba final fuera de muestra':'Diagnóstico final fuera de muestra',mgSelection);
 }
 
 function mg1PolicyCandidates(){
@@ -508,70 +508,76 @@ function mg1PolicyCandidates(){
     {id:'all',label:'Todas las pérdidas',ok:()=>true},
     {id:'ema',label:'EMA 9/21 sigue alineada',ok:(f,signal)=>signal==='SELL'?f.e9<f.e21:f.e9>f.e21},
     {id:'mom3',label:'Momentum 3 sigue a favor',ok:(f,signal)=>signal==='SELL'?f.mom3<0:f.mom3>0},
+    {id:'mom5',label:'Momentum 5 sigue a favor',ok:(f,signal)=>signal==='SELL'?f.mom5<0:f.mom5>0},
     {id:'ema_mom3',label:'EMA alineada + momentum 3',ok:(f,signal)=>(signal==='SELL'?f.e9<f.e21:f.e9>f.e21)&&(signal==='SELL'?f.mom3<0:f.mom3>0)},
+    {id:'ema_mom5',label:'EMA alineada + momentum 5',ok:(f,signal)=>(signal==='SELL'?f.e9<f.e21:f.e9>f.e21)&&(signal==='SELL'?f.mom5<0:f.mom5>0)},
     {id:'votes4',label:'Fuerza actual ≥ 4/5',ok:(f,signal)=>(signal==='SELL'?f.down:f.up)>=4},
     {id:'ema_votes4',label:'EMA alineada + fuerza ≥ 4/5',ok:(f,signal)=>(signal==='SELL'?f.e9<f.e21:f.e9>f.e21)&&((signal==='SELL'?f.down:f.up)>=4)},
     {id:'rsi',label:'RSI mantiene sesgo',ok:(f,signal)=>signal==='SELL'?f.rsi<=50:f.rsi>=50},
-    {id:'ema_rsi',label:'EMA alineada + RSI mantiene sesgo',ok:(f,signal)=>(signal==='SELL'?f.e9<f.e21:f.e9>f.e21)&&(signal==='SELL'?f.rsi<=50:f.rsi>=50)}
+    {id:'ema_rsi',label:'EMA alineada + RSI mantiene sesgo',ok:(f,signal)=>(signal==='SELL'?f.e9<f.e21:f.e9>f.e21)&&(signal==='SELL'?f.rsi<=50:f.rsi>=50)},
+    {id:'mom3_votes4',label:'Momentum 3 + fuerza ≥ 4/5',ok:(f,signal)=>(signal==='SELL'?f.mom3<0:f.mom3>0)&&((signal==='SELL'?f.down:f.up)>=4)}
   ];
 }
 
 function martingale1Stats(rows,duration,policy=null){
   const chosen=policy||mg1PolicyCandidates()[0];
-  let cycleWins=0, cycleLosses=0, mgUsed=0, mgSkipped=0, mgWins=0, mgLosses=0, netUnits=0;
+  let cycleWins=0,cycleLosses=0,mgUsed=0,mgSkipped=0,mgWins=0,mgLosses=0,netUnits=0;
+  let equity=0,peak=0,maxDrawdown=0,lossStreak=0,maxLossStreak=0;
   const details=[];
+  const closeCycle=(units,won)=>{
+    equity+=units; netUnits+=units;
+    if(equity>peak) peak=equity;
+    maxDrawdown=Math.max(maxDrawdown,peak-equity);
+    if(won) lossStreak=0;
+    else { lossStreak++; maxLossStreak=Math.max(maxLossStreak,lossStreak); }
+  };
   for(const x of rows){
     if(x.result==='DRAW') continue;
     if(x.result==='WIN'){
-      cycleWins++; netUnits+=1;
-      details.push({...x,mg1:'NO',cycleResult:'WIN'}); continue;
+      cycleWins++; closeCycle(1,true); details.push({...x,mg1:'NO',cycleResult:'WIN'}); continue;
     }
-    const mgIndex=x.entryIndex+duration, f=botFeatureCache[mgIndex];
-    const allowed=!!f && chosen.ok(f,x.signal);
+    const mgIndex=x.entryIndex+duration,f=botFeatureCache[mgIndex];
+    const allowed=!!f&&chosen.ok(f,x.signal);
     if(!allowed){
-      mgSkipped++; cycleLosses++; netUnits-=1;
-      details.push({...x,mg1:'SKIP',cycleResult:'LOSS'}); continue;
+      mgSkipped++; cycleLosses++; closeCycle(-1,false); details.push({...x,mg1:'SKIP',cycleResult:'LOSS'}); continue;
     }
     mgUsed++;
     const mgResult=resultFor(botCandles,mgIndex,duration,x.signal);
     if(mgResult==='WIN'){
-      mgWins++; cycleWins++; netUnits+=1;
-      details.push({...x,mg1:'WIN',cycleResult:'WIN'});
-    } else if(mgResult==='LOSS'){
-      mgLosses++; cycleLosses++; netUnits-=3;
-      details.push({...x,mg1:'LOSS',cycleResult:'LOSS'});
-    } else {
-      netUnits-=1; cycleLosses++;
-      details.push({...x,mg1:'DRAW',cycleResult:'LOSS'});
+      mgWins++; cycleWins++; closeCycle(1,true); details.push({...x,mg1:'WIN',cycleResult:'WIN'});
+    }else if(mgResult==='LOSS'){
+      mgLosses++; cycleLosses++; closeCycle(-3,false); details.push({...x,mg1:'LOSS',cycleResult:'LOSS'});
+    }else{
+      cycleLosses++; closeCycle(-1,false); details.push({...x,mg1:'DRAW',cycleResult:'LOSS'});
     }
   }
   const cycles=cycleWins+cycleLosses;
-  return {cycles,cycleWins,cycleLosses,accuracy:cycles?cycleWins/cycles:null,mgUsed,mgSkipped,mgWins,mgLosses,netUnits,details,policy:chosen};
+  return {cycles,cycleWins,cycleLosses,accuracy:cycles?cycleWins/cycles:null,mgUsed,mgSkipped,mgWins,mgLosses,
+    netUnits,maxDrawdown,maxLossStreak,unitsPerCycle:cycles?netUnits/cycles:0,details,policy:chosen};
 }
-
 function selectMg1Policy(devRows,duration){
   const candidates=mg1PolicyCandidates().map(policy=>({policy,stats:martingale1Stats(devRows,duration,policy)}));
-  // Se elige SOLO con desarrollo+confirmación. Exige muestra mínima y prioriza neto/riesgo,
-  // sin mirar el 30% final que luego se usa como prueba fuera de muestra.
   const eligible=candidates.filter(x=>x.stats.mgUsed>=12);
-  if(!eligible.length) return mg1PolicyCandidates()[0];
-  eligible.sort((a,b)=>{
-    const an=a.stats.netUnits/Math.max(1,a.stats.cycles), bn=b.stats.netUnits/Math.max(1,b.stats.cycles);
-    if(Math.abs(bn-an)>1e-9) return bn-an;
-    if(b.stats.accuracy!==a.stats.accuracy) return b.stats.accuracy-a.stats.accuracy;
-    return b.stats.mgUsed-a.stats.mgUsed;
-  });
-  return eligible[0].policy;
+  const pool=eligible.length?eligible:candidates;
+  const riskScore=x=>x.stats.unitsPerCycle-0.012*x.stats.maxDrawdown-0.008*x.stats.maxLossStreak;
+  pool.sort((a,b)=>riskScore(b)-riskScore(a)||b.stats.netUnits-a.stats.netUnits||((b.stats.accuracy||0)-(a.stats.accuracy||0)));
+  return {policy:pool[0]?.policy||mg1PolicyCandidates()[0],ranking:pool.slice(0,4)};
 }
-
-function renderBotResults(rows,duration,label='Backtest',mgPolicy=null){
+function renderBotResults(rows,duration,label='Backtest',mgSelection=null){
   const s=stats(rows);
   $('#botRows').textContent=`${botCandles.length} velas`; $('#botSignals').textContent=rows.length; $('#botWins').textContent=s.wins; $('#botLosses').textContent=s.losses; $('#botAccuracy').textContent=s.accuracy!==null?`${(s.accuracy*100).toFixed(1)}%`:'—';
   $('#botSummary').textContent=`${label}. Duración ${duration} min. DRAW no cuenta. La vela futura solo se usa después para calificar WIN/LOSS.`;
-  const mg=martingale1Stats(rows,duration,mgPolicy);
+  const selectedPolicy=mgSelection?.policy||null;
+  const mg=martingale1Stats(rows,duration,selectedPolicy);
   $('#mg1Cycles').textContent=mg.cycles; $('#mg1Wins').textContent=mg.cycleWins; $('#mg1Losses').textContent=mg.cycleLosses;
   $('#mg1Accuracy').textContent=mg.accuracy!==null?`${(mg.accuracy*100).toFixed(1)}%`:'—';
-  $('#mg1Note').textContent=`Filtro MG1: ${mg.policy.label}. MG1 usado ${mg.mgUsed} veces y omitido ${mg.mgSkipped}: ${mg.mgWins} WIN / ${mg.mgLosses} LOSS en MG1. Neto teórico ${mg.netUnits>=0?'+':''}${mg.netUnits.toFixed(0)} unidades con pago 1:1 (1 inicial y 2 en MG1). En validación robusta el filtro se elige solo con el 70% de desarrollo+confirmación; el 30% final no participa en esa elección.`;
+  $('#mg1Net').textContent=`${mg.netUnits>=0?'+':''}${mg.netUnits.toFixed(0)} u`;
+  $('#mg1Drawdown').textContent=`${mg.maxDrawdown.toFixed(0)} u`;
+  $('#mg1LossStreak').textContent=mg.maxLossStreak;
+  $('#mg1Used').textContent=mg.mgUsed;
+  $('#mg1Note').textContent=`Filtro MG1 elegido: ${mg.policy.label}. MG1 usado ${mg.mgUsed} veces y omitido ${mg.mgSkipped}: ${mg.mgWins} WIN / ${mg.mgLosses} LOSS en MG1. Neto teórico ${mg.netUnits>=0?'+':''}${mg.netUnits.toFixed(0)} unidades; drawdown máximo ${mg.maxDrawdown.toFixed(0)}u; racha máxima ${mg.maxLossStreak} ciclos perdidos. Simulación con pago 1:1 (1 inicial y 2 en MG1).`;
+  const rank=mgSelection?.ranking||[];
+  $('#mg1Compare').textContent=rank.length?`Ranking elegido SOLO en desarrollo+confirmación: ${rank.map((x,i)=>`${i+1}) ${x.policy.label}: ${x.stats.netUnits>=0?'+':''}${x.stats.netUnits.toFixed(0)}u, DD ${x.stats.maxDrawdown.toFixed(0)}u, racha ${x.stats.maxLossStreak}`).join(' · ')}. El 30% final no participa en la selección.`:'Sin ranking de políticas para este modo.';
   const list=$('#botSignalList'); list.innerHTML='';
   rows.slice(-50).reverse().forEach(x=>{const d=document.createElement('div');d.className=`bot-signal-row ${x.signal.toLowerCase()}`;const dt=new Date(x.entryTime);const confidence=x.confidence==null?(x.entryType||'filtro histórico'):`confianza análisis ${x.confidence}%`;d.innerHTML=`<div><strong>${x.signal==='BUY'?'↑ COMPRA':'↓ VENTA'} · ${dt.toLocaleString()}</strong><small>score ${x.score} · ${confidence}</small></div><strong class="${x.result.toLowerCase()}">${x.result}</strong>`;list.appendChild(d);});
   $('#botResults').classList.remove('hidden'); $('#botResults').scrollIntoView({behavior:'smooth'});

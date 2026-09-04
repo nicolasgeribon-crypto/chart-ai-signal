@@ -86,8 +86,8 @@
     <section id="botSection" class="hidden">
       <section class="hero bot-hero">
         <span class="eyebrow">🤖 laboratorio de señales</span>
-        <h2>Bot DEMO V9</h2>
-        <p>Prueba la lógica con un CSV de velas históricas. El backtest usa solo velas anteriores. V9 prueba entradas tras retrocesos y confirmación a favor de la tendencia.</p>
+        <h2>Bot DEMO V13</h2>
+        <p>Prueba la lógica con un CSV de velas históricas. El backtest usa solo velas anteriores. V13 mantiene las entradas por retroceso y compara reglas de MG1 usando solo desarrollo+confirmación, priorizando neto y control de riesgo.</p>
       </section>
       <section class="card bot-card">
         <input id="botCsvInput" type="file" accept=".csv,text/csv" hidden />
@@ -95,7 +95,7 @@
         <div id="botFileInfo" class="bot-file-info hidden"></div>
         <div class="bot-controls">
           <label>Duración<select id="botDuration"><option value="1">1 minuto</option><option value="5">5 minutos</option></select></label>
-          <label>Modo<select id="botStrategy"><option value="pullback">Retroceso robusto (V9)</option><option value="robust">Validación robusta mixta</option><option value="validated">Filtro selectivo</option><option value="balanced">Balanceado</option></select></label>
+          <label>Modo<select id="botStrategy"><option value="pullback">Retroceso robusto (V13)</option><option value="robust">Validación robusta mixta</option><option value="validated">Filtro selectivo</option><option value="balanced">Balanceado</option></select></label>
         </div>
         <button id="runBotBtn" class="primary hidden" type="button">▶ Ejecutar backtest DEMO</button>
         <p class="bot-note">El porcentaje mostrado es histórico sobre el archivo cargado; no garantiza resultados futuros. No ejecuta operaciones.</p>
@@ -111,8 +111,13 @@
             <div><small>CICLOS GANADOS</small><strong id="mg1Wins">0</strong></div>
             <div><small>CICLOS PERDIDOS</small><strong id="mg1Losses">0</strong></div>
             <div><small>ACIERTO CICLOS MG1</small><strong id="mg1Accuracy">—</strong></div>
+            <div><small>NETO TEÓRICO</small><strong id="mg1Net">—</strong></div>
+            <div><small>DRAWDOWN MÁX.</small><strong id="mg1Drawdown">—</strong></div>
+            <div><small>RACHA LOSS MÁX.</small><strong id="mg1LossStreak">—</strong></div>
+            <div><small>MG1 USADAS</small><strong id="mg1Used">0</strong></div>
           </div>
           <p id="mg1Note" class="bot-note"></p>
+          <p id="mg1Compare" class="bot-note"></p>
         </div>
         <div id="walkForwardPanel" class="validation-panel hidden">
           <div class="validation-title">VALIDACIÓN TEMPORAL</div>
