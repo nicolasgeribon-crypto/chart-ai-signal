@@ -106,8 +106,15 @@ BUY:
 
 SELL:
 - debe existir sesgo bajista razonablemente claro;
-- preferentemente un retroceso/rechazo o continuación bajista visible;
-- evita SELL justo encima de un soporte evidente o después de una caída agotada.
+- puede activarse por RETROCESO + rechazo bajista, o por CONTINUACIÓN DE TENDENCIA;
+- para continuación bajista, considera válido ver una secuencia clara de máximos/mínimos descendentes, 2 o más velas de presión vendedora y ruptura/cierre por debajo de un mínimo reciente;
+- no exijas siempre un retroceso si la continuación ya está confirmada por estructura e impulso;
+- evita SELL si la caída ya está claramente extendida contra un soporte visible y aparece rechazo fuerte inferior.
+
+BUY:
+- además del retroceso/rechazo, puede activarse por CONTINUACIÓN ALCISTA cuando haya máximos/mínimos crecientes, presión compradora sostenida y ruptura/cierre por encima de un máximo reciente;
+- no exijas siempre un retroceso si la continuación ya está confirmada;
+- evita BUY si el movimiento ya está muy extendido contra una resistencia visible.
 
 WAIT:
 - úsalo cuando no haya ventaja visual clara, haya señales contradictorias, la última vela esté formando una situación ambigua, falte confirmación, el precio esté atrapado entre niveles cercanos o el gráfico no permita verificar bien el contexto.
@@ -120,6 +127,8 @@ Reglas:
 - confidence mide claridad del análisis visual, NO probabilidad de ganar.
 - No prometas ganancias ni presentes ninguna señal como segura.
 - Si hay una configuración suficientemente clara en 5m, no uses WAIT solo por ser conservador: elige BUY o SELL y explica la evidencia visible.
+- Distingue entre una continuación todavía operable y un movimiento ya agotado. Una ruptura reciente con estructura y momentum a favor puede ser señal aunque no exista retroceso previo.
+- No uses datos futuros ni asumas que una vela posterior confirmará la señal.
 
 Devuelve únicamente JSON válido:
 {

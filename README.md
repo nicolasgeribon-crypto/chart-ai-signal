@@ -1,15 +1,12 @@
-# Chart AI Signal V20
+# Chart AI Signal V21
 
-V20 ajusta específicamente el módulo **Análisis con IA por captura** para gráficos de **5 minutos**.
+V21 mantiene el análisis visual en gráficos de 5 minutos y añade dos cambios:
 
-El analizador visual ahora:
-- espera capturas en timeframe 5m;
-- analiza estructura, máximos/mínimos, impulso, retrocesos, rechazo, cuerpos/mechas y niveles visibles;
-- usa BUY / SELL cuando hay una configuración 5m suficientemente clara;
-- cuando decide WAIT / NO OPERAR, explica qué condición falta para considerar compra o venta;
-- mantiene una duración simulada de 5 minutos;
-- no interpreta la confianza como probabilidad de ganar.
+- La IA puede detectar entradas por **continuación de tendencia**, además de retroceso/rechazo.
+- En una continuación bajista puede considerar máximos/mínimos descendentes, presión vendedora y ruptura reciente sin exigir siempre un retroceso.
+- En una continuación alcista aplica el criterio equivalente.
+- Se conserva el filtro para evitar perseguir movimientos ya agotados contra soporte/resistencia.
+- Cuando la decisión es WAIT, la interfaz muestra **SIN SEÑAL** y oculta completamente el porcentaje de confianza.
+- El porcentaje solo se muestra cuando existe COMPRA o VENTA.
 
-El Bot DEMO histórico se conserva aparte.
-
-Herramienta educativa; no garantiza resultados ni ejecuta operaciones.
+Herramienta educativa de análisis visual. No garantiza resultados futuros ni ejecuta operaciones.
