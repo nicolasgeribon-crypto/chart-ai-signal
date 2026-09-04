@@ -1,14 +1,14 @@
-# Chart AI Signal V18
+# Chart AI Signal V19
 
-V18 mantiene el payout real configurable y mejora la selección de Martingala 1.
+V19 continúa desde V18 y añade una capa experimental de filtro previo de entrada.
 
-Cambios:
-- usa el payout real dentro de la selección del filtro MG1;
-- prueba reglas más selectivas de momentum, EMA, fuerza, cuerpo, rango y RSI seguro;
-- penaliza drawdown, rachas de pérdidas y exceso de MG1;
-- exige al menos 8 MG1 en desarrollo+confirmación para evitar elegir filtros con muestra demasiado pequeña;
-- el 30% final permanece completamente fuera de muestra.
+Objetivo:
+- evitar algunas entradas iniciales débiles antes de necesitar MG1;
+- conservar payout real;
+- mantener la lógica MG1 selectiva;
+- elegir filtros únicamente con desarrollo + confirmación;
+- no usar el 30% final para seleccionar reglas.
 
-Objetivo: reducir MG1 malas y drawdown sin falsear el resultado final.
+Se agregan candidatos basados en EMA, momentum 3/5, fuerza y RSI seguro, con un mínimo de muestra para reducir sobreajuste.
 
-Simulación educativa; no garantiza resultados futuros ni ejecuta operaciones.
+Importante: es una simulación educativa. Un resultado histórico positivo no garantiza rendimiento futuro.
