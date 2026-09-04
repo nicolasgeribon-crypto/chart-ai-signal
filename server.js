@@ -76,77 +76,23 @@ app.post('/api/analyze', upload.single('chart'), async (req, res) => {
 
     const dataUrl = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
 
-    const prompt = `Analiza esta captura como un gráfico de trading de VELAS DE 5 MINUTOS. La persona usa este módulo exclusivamente para capturas en timeframe 5m y quiere una lectura visual educativa, clara y conservadora.
+    const prompt = `Analiza SOLO la captura de velas 5m para una operación DEMO de 5 minutos. Hora: ${localTime} (${timeZone}).
 
-Contexto:
-- Hora actual aproximada del teléfono: ${localTime}
-- Zona horaria: ${timeZone}
-- Timeframe esperado: 5 minutos
-- Duración de la operación simulada: 5 minutos
+Decide BUY, SELL o WAIT usando estructura reciente, impulso, máximos/mínimos, soporte/resistencia, cuerpos/mechas y confirmación.
 
-Primero:
-1. Comprueba que sea una captura legible de un gráfico financiero.
-2. Comprueba visualmente que el timeframe sea 5m. Si se ve claramente otro timeframe, usa WAIT y explica que la captura no está en 5m. Si el timeframe no puede verificarse, indícalo y sé más conservador.
-3. Analiza solamente lo que aparece en la captura; no inventes precios, indicadores ni niveles.
+Reglas clave:
+- No inventes datos. Si no es gráfico legible o no es 5m, WAIT.
+- BUY/SELL solo con ventaja visual clara.
+- NO persigas movimientos extendidos: tras varias velas fuertes consecutivas cerca de máximo/resistencia o mínimo/soporte, WAIT salvo que exista un gatillo NUEVO (retroceso/retest + rechazo, consolidación + ruptura confirmada, o ruptura fresca tras pausa).
+- Una sola mecha larga contra tendencia NO basta para operar reversión.
+- Tendencia fuerte por sí sola NO basta para entrar tarde.
+- WAIT si hay rango, contradicción, vela incompleta, agotamiento o falta confirmación.
+- confidence = claridad visual, no probabilidad de ganar. Para WAIT usa 0.
+- entry_time: BUY/SELL HH:MM cercano a ahora; WAIT --:--. expiry_minutes=5.
+- Textos muy breves.
 
-Para decidir BUY / SELL / WAIT en 5m, evalúa en conjunto:
-- dirección y estructura de las últimas velas;
-- máximos y mínimos recientes;
-- impulso y pérdida de impulso;
-- retroceso después de un movimiento;
-- rechazo o continuación visible;
-- proximidad a soporte/resistencia visibles;
-- tamaño relativo de cuerpos y mechas;
-- si la última vela todavía está incompleta o la configuración necesita confirmación.
-
-BUY:
-- debe existir sesgo alcista razonablemente claro;
-- preferentemente un retroceso/rechazo o continuación alcista visible;
-- evita BUY justo debajo de una resistencia evidente o después de una subida agotada.
-
-SELL:
-- debe existir sesgo bajista razonablemente claro;
-- puede activarse por RETROCESO + rechazo bajista, o por CONTINUACIÓN DE TENDENCIA;
-- para continuación bajista, considera válido ver una secuencia clara de máximos/mínimos descendentes, 2 o más velas de presión vendedora y ruptura/cierre por debajo de un mínimo reciente;
-- no exijas siempre un retroceso si la continuación ya está confirmada por estructura e impulso;
-- evita SELL si la caída ya está claramente extendida contra un soporte visible y aparece rechazo fuerte inferior.
-
-BUY:
-- además del retroceso/rechazo, puede activarse por CONTINUACIÓN ALCISTA cuando haya máximos/mínimos crecientes, presión compradora sostenida y ruptura/cierre por encima de un máximo reciente;
-- no exijas siempre un retroceso si la continuación ya está confirmada;
-- evita BUY si el movimiento ya está muy extendido contra una resistencia visible.
-
-WAIT:
-- úsalo cuando no haya ventaja visual clara, haya señales contradictorias, la última vela esté formando una situación ambigua, falte confirmación, el precio esté atrapado entre niveles cercanos o el gráfico no permita verificar bien el contexto.
-- IMPORTANTE: si usas WAIT, reason y setup deben explicar exactamente QUÉ FALTA para considerar una COMPRA o una VENTA. No respondas solamente "sin entrada clara".
-
-Reglas:
-- expiry_minutes siempre 5.
-- Para BUY o SELL, entry_time debe ser HH:MM cercano al momento actual.
-- Para WAIT, entry_time debe ser --:--.
-- confidence mide claridad del análisis visual, NO probabilidad de ganar.
-- No prometas ganancias ni presentes ninguna señal como segura.
-- Si hay una configuración suficientemente clara en 5m, no uses WAIT solo por ser conservador: elige BUY o SELL y explica la evidencia visible.
-- Distingue entre una continuación todavía operable y un movimiento ya agotado. Una ruptura reciente con estructura y momentum a favor puede ser señal aunque no exista retroceso previo.
-- No uses datos futuros ni asumas que una vela posterior confirmará la señal.
-
-Devuelve únicamente JSON válido:
-{
-  "valid_chart": true,
-  "asset": "texto o No identificado",
-  "timeframe": "5m o No verificable",
-  "signal": "BUY|SELL|WAIT",
-  "entry_time": "HH:MM o --:--",
-  "expiry_minutes": 5,
-  "confidence": 0,
-  "trend": "alcista|bajista|lateral|incierta",
-  "support": "texto breve o No visible",
-  "resistance": "texto breve o No visible",
-  "setup": "qué configuración de 5m se observa; si WAIT, qué falta para operar",
-  "reason": "explicación concreta basada en las velas visibles; si WAIT, indica qué confirmación convertiría la lectura en BUY o SELL",
-  "invalidation": "qué movimiento visible invalidaría la lectura o No aplica",
-  "risk_note": "Análisis visual educativo en 5m; una captura no permite predecir con certeza el próximo movimiento."
-}`;
+Devuelve SOLO JSON válido:
+{"valid_chart":true,"asset":"texto","timeframe":"5m","signal":"BUY|SELL|WAIT","entry_time":"HH:MM|--:--","expiry_minutes":5,"confidence":0,"trend":"alcista|bajista|lateral|incierta","support":"breve","resistance":"breve","setup":"máx 15 palabras","reason":"máx 30 palabras","invalidation":"máx 15 palabras","risk_note":"Análisis visual educativo en 5m; no predice con certeza."}`;
 
     const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
@@ -160,10 +106,10 @@ Devuelve únicamente JSON válido:
           role: 'user',
           content: [
             { type: 'input_text', text: prompt },
-            { type: 'input_image', image_url: dataUrl }
+            { type: 'input_image', image_url: dataUrl, detail: 'low' }
           ]
         }],
-        max_output_tokens: 1000
+        max_output_tokens: 350
       })
     });
 
