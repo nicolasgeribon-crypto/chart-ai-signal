@@ -280,7 +280,7 @@ $('#clearHistoryBtn').addEventListener('click', () => {
 renderHistory();
 refreshStatus();
 
-// --- Bot DEMO V14: MG1 selectiva optimizada por neto, drawdown y racha de pérdidas ---
+// --- Bot DEMO V15: MG1 selectiva optimizada por neto, drawdown y racha de pérdidas ---
 const botCsvInput = $('#botCsvInput');
 const botPickBtn = $('#botPickBtn');
 const runBotBtn = $('#runBotBtn');
@@ -569,24 +569,35 @@ function martingale1Stats(rows,duration,policy=null){
 function selectMg1Policy(devRows,duration){
   const candidates=mg1PolicyCandidates().map(policy=>({policy,stats:martingale1Stats(devRows,duration,policy)}));
   const enough=candidates.filter(x=>x.stats.mgUsed>=10);
+  const base=enough.length?enough:candidates;
 
-  // V14: objetivos de riesgo medidos SOLO en desarrollo+confirmación.
-  // No se mira el 30% final para elegir la política.
-  const strict=enough.filter(x=>x.stats.maxDrawdown<=8 && x.stats.maxLossStreak<=2 && x.stats.netUnits>0);
-  const relaxed=enough.filter(x=>x.stats.maxDrawdown<=10 && x.stats.maxLossStreak<=3 && x.stats.netUnits>0);
-  const pool=strict.length?strict:(relaxed.length?relaxed:(enough.length?enough:candidates));
+  // PERFIL CONSERVADOR: primero riesgo, luego neto.
+  const conservativePool=base.filter(x=>x.stats.netUnits>0 && x.stats.maxDrawdown<=8);
+  const cp=conservativePool.length?conservativePool:base;
+  cp.sort((a,b)=>
+    a.stats.maxLossStreak-b.stats.maxLossStreak ||
+    a.stats.maxDrawdown-b.stats.maxDrawdown ||
+    b.stats.netUnits-a.stats.netUnits
+  );
+  const conservative=cp[0];
 
-  const score=x=>{
-    const s=x.stats;
-    // Prioriza neto por ciclo, pero castiga con fuerza DD y rachas.
-    return (s.unitsPerCycle*100) + s.netUnits*0.20 - s.maxDrawdown*0.90 - s.maxLossStreak*1.50;
-  };
-  pool.sort((a,b)=>score(b)-score(a)||b.stats.netUnits-a.stats.netUnits||((b.stats.accuracy||0)-(a.stats.accuracy||0)));
+  // PERFIL NETO+: acepta hasta 4 pérdidas consecutivas y DD<=10
+  // para comprobar si el aumento de neto sobrevive fuera de muestra.
+  const netPool=base.filter(x=>x.stats.netUnits>0 && x.stats.maxDrawdown<=10 && x.stats.maxLossStreak<=4);
+  const np=netPool.length?netPool:base;
+  np.sort((a,b)=>
+    b.stats.netUnits-a.stats.netUnits ||
+    a.stats.maxDrawdown-b.stats.maxDrawdown ||
+    a.stats.maxLossStreak-b.stats.maxLossStreak
+  );
+  const netPlus=np[0];
 
   return {
-    policy:pool[0]?.policy||mg1PolicyCandidates()[0],
-    ranking:pool.slice(0,5),
-    riskTier:strict.length?'OBJETIVO DD≤8 / RACHA≤2':(relaxed.length?'RELajado DD≤10 / RACHA≤3':'SIN CANDIDATO DENTRO DEL LÍMITE')
+    policy:conservative?.policy||mg1PolicyCandidates()[0],
+    conservative,
+    netPlus,
+    ranking:[conservative,netPlus].filter(Boolean),
+    riskTier:'DOS PERFILES: CONSERVADOR vs NETO+'
   };
 }
 function renderBotResults(rows,duration,label='Backtest',mgSelection=null){
@@ -595,6 +606,8 @@ function renderBotResults(rows,duration,label='Backtest',mgSelection=null){
   $('#botSummary').textContent=`${label}. Duración ${duration} min. DRAW no cuenta. La vela futura solo se usa después para calificar WIN/LOSS.`;
   const selectedPolicy=mgSelection?.policy||null;
   const mg=martingale1Stats(rows,duration,selectedPolicy);
+  const mgConservative=mgSelection?.conservative?martingale1Stats(rows,duration,mgSelection.conservative.policy):mg;
+  const mgNetPlus=mgSelection?.netPlus?martingale1Stats(rows,duration,mgSelection.netPlus.policy):mg;
   $('#mg1Cycles').textContent=mg.cycles; $('#mg1Wins').textContent=mg.cycleWins; $('#mg1Losses').textContent=mg.cycleLosses;
   $('#mg1Accuracy').textContent=mg.accuracy!==null?`${(mg.accuracy*100).toFixed(1)}%`:'—';
   $('#mg1Net').textContent=`${mg.netUnits>=0?'+':''}${mg.netUnits.toFixed(0)} u`;
@@ -604,6 +617,11 @@ function renderBotResults(rows,duration,label='Backtest',mgSelection=null){
   $('#mg1Note').textContent=`Filtro MG1 elegido: ${mg.policy.label}. MG1 usado ${mg.mgUsed} veces y omitido ${mg.mgSkipped}: ${mg.mgWins} WIN / ${mg.mgLosses} LOSS en MG1. Neto teórico ${mg.netUnits>=0?'+':''}${mg.netUnits.toFixed(0)} unidades; drawdown máximo ${mg.maxDrawdown.toFixed(0)}u; racha máxima ${mg.maxLossStreak} ciclos perdidos. Simulación con pago 1:1 (1 inicial y 2 en MG1).`;
   const rank=mgSelection?.ranking||[];
   $('#mg1Compare').textContent=rank.length?`V14 ${mgSelection?.riskTier||''}. Ranking elegido SOLO en desarrollo+confirmación: ${rank.map((x,i)=>`${i+1}) ${x.policy.label}: ${x.stats.netUnits>=0?'+':''}${x.stats.netUnits.toFixed(0)}u, DD ${x.stats.maxDrawdown.toFixed(0)}u, racha ${x.stats.maxLossStreak}`).join(' · ')}. El 30% final NO participa en la selección.`:'Sin ranking de políticas para este modo.';
+  const profileEl=$('#mg1Profiles');
+  if(profileEl){
+    const fmt=x=>`${x.netUnits>=0?'+':''}${x.netUnits.toFixed(0)}u · ciclos ${x.accuracy!==null?(x.accuracy*100).toFixed(1)+'%':'—'} · DD ${x.maxDrawdown.toFixed(0)}u · racha ${x.maxLossStreak} · MG1 ${x.mgUsed}`;
+    profileEl.textContent=`CONSERVADOR [${mgConservative.policy.label}]: ${fmt(mgConservative)}. NETO+ [${mgNetPlus.policy.label}]: ${fmt(mgNetPlus)}. Ambos filtros fueron elegidos sin mirar este 30% final.`;
+  }
   const list=$('#botSignalList'); list.innerHTML='';
   rows.slice(-50).reverse().forEach(x=>{const d=document.createElement('div');d.className=`bot-signal-row ${x.signal.toLowerCase()}`;const dt=new Date(x.entryTime);const confidence=x.confidence==null?(x.entryType||'filtro histórico'):`confianza análisis ${x.confidence}%`;d.innerHTML=`<div><strong>${x.signal==='BUY'?'↑ COMPRA':'↓ VENTA'} · ${dt.toLocaleString()}</strong><small>score ${x.score} · ${confidence}</small></div><strong class="${x.result.toLowerCase()}">${x.result}</strong>`;list.appendChild(d);});
   $('#botResults').classList.remove('hidden'); $('#botResults').scrollIntoView({behavior:'smooth'});
