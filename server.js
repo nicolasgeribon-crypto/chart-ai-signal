@@ -4,6 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { diagnoseStockity } from './stockity.js';
 import { diagnoseBinomo } from './binomo.js';
+import { diagnosePublicAsBinomo } from './as-binomo.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -97,6 +98,16 @@ app.post('/api/binomo/diagnose', async (_req, res) => {
   }
 });
 
+app.post('/api/binomo/as-public-diagnose', async (_req, res) => {
+  try {
+    const result = await diagnosePublicAsBinomo();
+    res.json(result);
+  } catch (err) {
+    console.error('Binomo AS public diagnostic:', err);
+    res.status(500).json({ mode: 'public-read-only', error: 'Falló la prueba pública de as.binomo.com.' });
+  }
+});
+
 app.post('/api/analyze', upload.single('chart'), async (req, res) => {
   try {
     if (!req.file) {
@@ -122,23 +133,29 @@ app.post('/api/analyze', upload.single('chart'), async (req, res) => {
 
     const dataUrl = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
 
-    const prompt = `Analiza SOLO la captura de velas 5m para una operación DEMO de 5 minutos. Hora: ${localTime} (${timeZone}).
+    const prompt = `Analiza SOLO la captura del gráfico para una prueba DEMO. Hora: ${localTime} (${timeZone}).
 
-Decide BUY, SELL o WAIT usando estructura reciente, impulso, máximos/mínimos, soporte/resistencia, cuerpos/mechas y confirmación.
+Evalúa tres horizontes de expiración: 1, 3 y 5 minutos. Elige BUY, SELL o WAIT y, solo si hay una ventaja visual clara, selecciona el horizonte que mejor encaje con la estructura visible.
+
+Usa estructura reciente, impulso, máximos/mínimos, soporte/resistencia, cuerpos/mechas, rechazo, ruptura/retest y confirmación. Puedes usar principios compatibles con análisis técnico (tendencia, momentum, sobreextensión y volatilidad), pero NO inventes valores de RSI/MACD/Bollinger si no están visibles.
 
 Reglas clave:
-- No inventes datos. Si no es gráfico legible o no es 5m, WAIT.
-- BUY/SELL solo con ventaja visual clara.
-- NO persigas movimientos extendidos: tras varias velas fuertes consecutivas cerca de máximo/resistencia o mínimo/soporte, WAIT salvo que exista un gatillo NUEVO (retroceso/retest + rechazo, consolidación + ruptura confirmada, o ruptura fresca tras pausa).
-- Una sola mecha larga contra tendencia NO basta para operar reversión.
+- No inventes datos. Si el gráfico no es legible, WAIT.
+- BUY/SELL solo con confluencia visual clara; WAIT si ninguna de 1/3/5 min tiene confirmación suficiente.
+- 1 min: solo para gatillo inmediato muy claro/rechazo fuerte.
+- 3 min: para continuación o reversión confirmada de corto plazo.
+- 5 min: para estructura más amplia y movimiento sostenido confirmado.
+- NO persigas movimientos extendidos cerca de soporte/resistencia.
+- Una sola mecha larga contra tendencia NO basta para reversión.
 - Tendencia fuerte por sí sola NO basta para entrar tarde.
-- WAIT si hay rango, contradicción, vela incompleta, agotamiento o falta confirmación.
-- confidence = claridad visual, no probabilidad de ganar. Para WAIT usa 0.
-- entry_time: BUY/SELL HH:MM cercano a ahora; WAIT --:--. expiry_minutes=5.
+- WAIT si hay rango, contradicción, vela incompleta, agotamiento o falta de confirmación.
+- confidence = claridad del análisis, NO probabilidad de ganar. Para WAIT usa 0.
+- entry_time: BUY/SELL HH:MM cercano a ahora; WAIT --:--.
+- expiry_minutes DEBE ser 1, 3 o 5 para BUY/SELL; para WAIT usa 5.
 - Textos muy breves.
 
 Devuelve SOLO JSON válido:
-{"valid_chart":true,"asset":"texto","timeframe":"5m","signal":"BUY|SELL|WAIT","entry_time":"HH:MM|--:--","expiry_minutes":5,"confidence":0,"trend":"alcista|bajista|lateral|incierta","support":"breve","resistance":"breve","setup":"máx 15 palabras","reason":"máx 30 palabras","invalidation":"máx 15 palabras","risk_note":"Análisis visual educativo en 5m; no predice con certeza."}`;
+{"valid_chart":true,"asset":"texto","timeframe":"texto","signal":"BUY|SELL|WAIT","entry_time":"HH:MM|--:--","expiry_minutes":1,"confidence":0,"trend":"alcista|bajista|lateral|incierta","support":"breve","resistance":"breve","setup":"máx 15 palabras","reason":"máx 30 palabras","invalidation":"máx 15 palabras","risk_note":"Análisis visual educativo; no predice con certeza."}`;
 
     const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
@@ -170,11 +187,11 @@ Devuelve SOLO JSON válido:
       body.output?.flatMap(o => o.content || []).find(c => c.type === 'output_text')?.text || '';
     const result = extractJson(text);
 
-    result.expiry_minutes = 5;
+    result.expiry_minutes = [1, 3, 5].includes(Number(result.expiry_minutes)) ? Number(result.expiry_minutes) : 5;
     result.confidence = Math.max(0, Math.min(100, Number(result.confidence) || 0));
     if (!['BUY', 'SELL', 'WAIT'].includes(result.signal)) result.signal = 'WAIT';
     if (result.signal === 'WAIT') result.entry_time = '--:--';
-    result.exit_time = result.signal === 'WAIT' ? '--:--' : addMinutesToHHMM(result.entry_time, 5);
+    result.exit_time = result.signal === 'WAIT' ? '--:--' : addMinutesToHHMM(result.entry_time, result.expiry_minutes);
     if (!result.valid_chart) {
       result.signal = 'WAIT';
       result.entry_time = '--:--';
