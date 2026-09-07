@@ -204,6 +204,8 @@ function showResult(d) {
   const exitTime = d.exit_time || addMinutesToHHMM(d.entry_time, Number(d.expiry_minutes) || 5);
   $('#entry').textContent = d.entry_time || '--:--';
   $('#exit').textContent = exitTime;
+  const durationText = $('#durationText');
+  if (durationText) durationText.textContent = d.signal === 'WAIT' ? '—' : `${Number(d.expiry_minutes) || 5} min`;
   const confidenceBlock = $('#confidenceBlock');
   const isWait = d.signal === 'WAIT';
   if (confidenceBlock) confidenceBlock.classList.toggle('hidden', isWait);
